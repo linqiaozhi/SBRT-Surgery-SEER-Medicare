@@ -34,6 +34,22 @@ get.dates.of.procedure  <-  function( A, proc.codes ) {
 }
 
 
+get.dates.of.dx  <-  function( A, proc.codes ) {
+    date.cols  <-  A %>% select( SRGCL_PRCDR_PRFRM_1_DT:SRGCL_PRCDR_PRFRM_25_DT) %>% colnames
+    # Date of each procedure 
+    # First, obtain the index of each column that has the procedure of interest
+    A$proc.colidx  <- find.rows.idx( A %>% select( SRGCL_PRCDR_1_CD:SRGCL_PRCDR_25_CD ), proc.codes )
+    # Now that the column index is obtained, need to grab the actual date
+    A <-  A %>% 
+        rowwise() %>% 
+        mutate( proc.date = 
+               ifelse ( is.na(proc.colidx), NA, unlist(cur_data()[ date.cols[proc.colidx]] ) )
+        )
+    return(unlist(A$proc.date))
+}
+
+
+
 
 
 ################################

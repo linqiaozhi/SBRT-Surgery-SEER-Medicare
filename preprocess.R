@@ -47,7 +47,7 @@ if ( ! file.exists (fn.RDS) ) {
 }else{
     medpar  <-  readRDS(fn.RDS)
 }
-medpars
+medpar <- medpar %>% mutate( sbrt.date = ymd(sbrt.date), sublobar.date = ymd(sublobar.date),)
 
 
 ################################
@@ -75,7 +75,7 @@ carrier  <-  bind_rows(carriers,  .id='dataset.year')
 rm(carriers); gc();
 
 carrier$sbrt  <-  find.rows( carrier %>% select( HCPCS_CD) , sbrt.cpts )
-carrier$sbrt.date  <-  ifelse (carrier$sbrt, carriers$CLM_THRU_DT,NA_character_) %>% ymd 
+carrier$sbrt.date  <-  ifelse ( carrier$sbrt, carrier$CLM_THRU_DT,NA_character_) %>% ymd 
 table( carrier$sbrt, useNA="ifany") # 33,000 SBRTs
 
 #TODO: Check the diganosis codes--make sure it's SBRT for lung cancer
@@ -98,13 +98,194 @@ table( carrier$sbrt, useNA="ifany") # 33,000 SBRTs
 ################################
 # Process the  Outpatient files
 ################################
-table(carrieri.small$sbrt , useNA="ifany")
-
 outpati  <-   read_dta('../SEER-Medicare-data/data/SEER_Medicare/outpat2014.base.dta')
 outpati.small  <- outpati %>% inner_join(lung.SEER.pids) 
-fofo  <-  outpati %>% filter (ICD_PRCDR_CD1 !='')
+outpati.small[  outpati.small == "" ]  <-  NA
 
-    medpars[[i]]  <-  medpari %>% inner_join(lung.SEER.pids) %>% select( PATIENT_ID, ADMSN_DT,  DSCHRG_DT, SRGCL_PRCDR_IND_SW, DGNS_1_CD:DGNS_25_CD, SRGCL_PRCDR_1_CD:SRGCL_PRCDR_25_CD, SRGCL_PRCDR_PRFRM_1_DT:SRGCL_PRCDR_PRFRM_25_DT)
+
+
+object.size(outpati.small)/1E9
+fofo
+
+
+
+
+
+fn.RDS  <- sprintf('%s/outpat.base.RDS', data.path)
+if ( ! file.exists (fn.RDS) ) {
+    outpats  <-  list()
+    years  <-  as.character(2010:2019)
+    for (yeari in 1:length(years)) {
+        year  <-  years[yeari]
+        print(year)
+        outpati  <-   read_dta(sprintf('%s/outpat%s.base.dta', data.path, year))
+        # inner join with the SEER patients to reduce size
+        outpats[[year]]  <-  outpati %>% 
+            inner_join(lung.SEER.pids) %>% 
+            select( PATIENT_ID, CLM_FROM_DT, CLM_THRU_DT, PRNCPAL_DGNS_CD:PRCDR_DT25  ) %>% select( ! contains( "PRCDR_DT"))
+    }
+    outpat  <-  bind_rows(outpats,  .id='dataset.year')
+    saveRDS(object = outpat, file = fn.RDS) 
+}else{
+    outpat  <-  readRDS(fn.RDS)
+}
+fofo  <-  outpat %>% mutate( CLM_FROM_DT = ymd(CLM_FROM_DT), CLM_THRU_DT = ymd(CLM_THRU_DT))
+
+
+
+################################
+# SEER variables 
+################################
+
+nna  <-  function ( x) !is.na(x)
+
+lung.SEER
+
+label_list  <-  list(  AGERECODEWITHSINGLEAGES_AND_100 = 'Age')
+
+table( lung.SEER$RACE_RECODE_WHITE_BLACK_OTHER, useNA="ifany")
+table( lung.SEER$YEAR_OF_DIAGNOSIS, useNA="ifany")
+
+# SEQUENCE_NUMBER, extent of disease width, SURVIVAL_MONTHS, TNM
+A  <-  lung.SEER %>% select( PATIENT_ID, AGERECODEWITHSINGLEAGES_AND_100, 
+                            MARITAL_STATUS_AT_DIAGNOSIS, 
+                            RACE_RECODE_WHITE_BLACK_OTHER, 
+                            SEX,
+                            MONTH_OF_DIAGNOSIS, YEAR_OF_DIAGNOSIS,
+                            HISTOLOGIC_TYPE_ICD_O_3,
+                            SEERCAUSESPECIFICDEATHCLASSIFIC,
+                            SEEROTHERCAUSEOFDEATHCLASSIFICA) %>% 
+                    mutate ( 
+                            dx.date = ymd( ifelse ( nna(YEAR_OF_DIAGNOSIS) & nna(MONTH_OF_DIAGNOSIS) , sprintf('%d%02d15', YEAR_OF_DIAGNOSIS, MONTH_OF_DIAGNOSIS), NA_character_ ) )  
+                    ) %>% arrange(dx.date) %>% distinct(PATIENT_ID, .keep_all =T)
+
+#TODO: Figure out why there are duplicated entries and be smarter about picking one
+
+################################
+#  Merge SEER with the treatment status
+################################
+# Determine the treatment. Sublobar date comes from Medpar, and SBRT date comes
+# from both Medpar and carrier. We bind them into one first, and then merge.
+medpar.tx  <-   medpar %>% select ( PATIENT_ID, sbrt.date, sublobar.date) %>% filter(!is.na(sbrt.date) | !is.na(sublobar.date) )
+carrier.tx  <-  carrier %>% select(PATIENT_ID, sbrt.date) %>% filter(!is.na(sbrt.date))
+#medpar.carrier.tx  <-  bind_rows ( medpar.tx, carrier.tx)
+
+# Running these summarize statements on all hundreds of thousands of SEER patients does not make sense, but we 
+# do need the dates from medpar. Will restrict to medpar.carrier.tx patients then join back to SEER
+medpar.carrier.tx  <- bind_rows ( medpar.tx, carrier.tx)  %>% 
+    left_join(A )  %>%
+    group_by( PATIENT_ID ) %>% 
+    summarise ( 
+               dx.date = first(dx.date), 
+               tx = case_when ( 
+                # any( nna( sbrt.date) ) & ! any( nna(sublobar.date))  ~ first(na.omit(sbrt.date)),
+                # ! any( nna( sbrt.date) ) &  any( nna(sublobar.date)) ~ first(na.omit(sublobar.date)),
+                any( nna( sbrt.date) ) & ! any( nna(sublobar.date))  ~ 'sbrt',
+                ! any( nna( sbrt.date) ) &  any( nna(sublobar.date)) ~ 'sublobar',
+                T ~ (NA_character_)
+                ),
+               tx.date = case_when (
+                                    tx == 'sbrt' ~ first(sbrt.date),
+                                    tx == 'sublobar' ~ first(sublobar.date),
+                                    T ~ ymd(NA_character_)
+                                    ) ) %>%
+               mutate( tx.after.dx = tx.date > dx.date)
+table( medpar.carrier.tx$tx.after.dx, useNA="ifany")
+table( medpar.carrier.tx$tx, medpar.carrier.tx$tx.after.dx, useNA="ifany")
+medpar.carrier.tx.2 <- medpar.carrier.tx %>% filter( tx.after.dx & nna(tx.date) ) 
+A2 <- A %>% right_join(medpar.carrier.tx.2) 
+
+
+################################
+# Merge with negative outcomes 
+################################
+# Create negative outcomes
+# Get common diagnoses
+outpati.long  <-  outpats[['2017']] %>% select( PATIENT_ID, ICD_DGNS_CD1:ICD_DGNS_E_CD12) %>% pivot_longer(!PATIENT_ID, names_to = 'diagnosis.field', values_to = 'diagnosis.code', values_drop_na = T) 
+conditions  <-  outpati.long %>% filter ( diagnosis.code != "") %>% count(diagnosis.code) %>% arrange(-n)%>% top_n ( 1000) %>% mutate( explanation= explain_table(as.icd10( diagnosis.code),condense=F)$short_desc)
+conditions %>% print(n=Inf)
+
+negative.outcomes  <-  list(
+        'fall' = c( expand_range('E880','E888'),expand_range('W00', 'W19' )),
+        'acute_bronchitis' = c('4660', '4661', sprintf('J20%d',0:9))
+)
+
+
+
+
+# There are two kinds of negative outcomes: 1) Any outcome that occured after the treatment and 2) Any outcome that occured for the first time after the treatment.  Let's focus on the first for now. 
+
+print(negative.outcomes)
+
+expand_range('J200', 'J209')
+
+table( outpat$dataset.year, useNA="ifany")
+
+outpat.noc  <- outpat%>% right_join(A2) 
+
+outpat.noc$fall_  <-  outpat.noc %>% select( ICD_DGNS_CD1:ICD_DGNS_E_CD12) %>% find.rows (negative.outcomes[['fall']])
+outpat.noc %>% mutate( fall)
+table( outpat$fall, useNA="ifany")
+
+sum(outpat$CLM_FROM_DT == "")
+
+#TODO: Do I need to do survival analysis for each negative outcome? The length of follow up is so different between the two groups...
+# Need to use person-time
+# Proportional hazards does not apply here. You have ahug
+
+
+
+
+
+
+
+
+
+
+
+A2 %>% group_by(tx) %>% summarise( across( c('AGERECODEWITHSINGLEAGES_AND_100', 'SEERCAUSESPECIFICDEATHCLASSIFIC') , ~ mean( .x, na.rm = T)))
+
+
+
+
+    table( (fofo$tx.date  > fofo$dx.date), useNA="ifany")
+    summary( interval(fofo$tx.date  , fofo$dx.date)%/%months(1), useNA="ifany")
+    table( , useNA="ifany")
+
+glimpse(fofo)
+    
+
+A2  <- A  %>% left_join(medpar.carrier.tx )  %>% mutate( tx = case_when ( nna( sbrt.date) & is.na( sublobar.date) &  
+
+
+# 
+
+
+
+
+
+
+
+#TODO: Is there an issue where the bulk of SBRT patients were treated more
+#recently so have less time to die? 
+
+colnames(lung.SEER)
+l
+                            
+
+
+)
+
+
+SEERcausespecificdeathclassific
+SEERothercauseofdeathclassifica
+
+
+# Complications
+
+
+
+
 
 
 
