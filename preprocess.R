@@ -129,7 +129,7 @@ if ( ! file.exists (fn.RDS) ) {
 }else{
     outpat  <-  readRDS(fn.RDS)
 }
-fofo  <-  outpat %>% mutate( CLM_FROM_DT = ymd(CLM_FROM_DT), CLM_THRU_DT = ymd(CLM_THRU_DT))
+outpat  <-  outpat %>% mutate( CLM_FROM_DT = ymd(CLM_FROM_DT), CLM_THRU_DT = ymd(CLM_THRU_DT))
 
 
 
@@ -152,12 +152,19 @@ A  <-  lung.SEER %>% select( PATIENT_ID, AGERECODEWITHSINGLEAGES_AND_100,
                             RACE_RECODE_WHITE_BLACK_OTHER, 
                             SEX,
                             MONTH_OF_DIAGNOSIS, YEAR_OF_DIAGNOSIS,
+                            SEER_DATEOFDEATH_MONTH, SEER_DATEOFDEATH_YEAR,
                             HISTOLOGIC_TYPE_ICD_O_3,
                             SEERCAUSESPECIFICDEATHCLASSIFIC,
                             SEEROTHERCAUSEOFDEATHCLASSIFICA) %>% 
                     mutate ( 
-                            dx.date = ymd( ifelse ( nna(YEAR_OF_DIAGNOSIS) & nna(MONTH_OF_DIAGNOSIS) , sprintf('%d%02d15', YEAR_OF_DIAGNOSIS, MONTH_OF_DIAGNOSIS), NA_character_ ) )  
-                    ) %>% arrange(dx.date) %>% distinct(PATIENT_ID, .keep_all =T)
+                            dx.date = ymd( ifelse ( nna(YEAR_OF_DIAGNOSIS) & nna(MONTH_OF_DIAGNOSIS) , sprintf('%d%02d15', YEAR_OF_DIAGNOSIS, MONTH_OF_DIAGNOSIS), NA_character_ ) )  ,
+                            death.date = ymd( ifelse ( ""!=(SEER_DATEOFDEATH_YEAR) & ""!=(SEER_DATEOFDEATH_MONTH) , sprintf('%s%s15', SEER_DATEOFDEATH_YEAR, SEER_DATEOFDEATH_MONTH), NA_character_ ) )  
+                            ) %>% arrange(dx.date) %>% distinct(PATIENT_ID, .keep_all =T)
+
+
+                            A %>% print(n=100, width=Inf)
+
+
 
 #TODO: Figure out why there are duplicated entries and be smarter about picking one
 
@@ -177,13 +184,13 @@ medpar.carrier.tx  <- bind_rows ( medpar.tx, carrier.tx)  %>%
     group_by( PATIENT_ID ) %>% 
     summarise ( 
                dx.date = first(dx.date), 
-               tx = case_when ( 
+               tx = factor( case_when ( 
                 # any( nna( sbrt.date) ) & ! any( nna(sublobar.date))  ~ first(na.omit(sbrt.date)),
                 # ! any( nna( sbrt.date) ) &  any( nna(sublobar.date)) ~ first(na.omit(sublobar.date)),
                 any( nna( sbrt.date) ) & ! any( nna(sublobar.date))  ~ 'sbrt',
                 ! any( nna( sbrt.date) ) &  any( nna(sublobar.date)) ~ 'sublobar',
                 T ~ (NA_character_)
-                ),
+                ), levels = c('sublobar', 'sbrt')),
                tx.date = case_when (
                                     tx == 'sbrt' ~ first(sbrt.date),
                                     tx == 'sublobar' ~ first(sublobar.date),
@@ -193,27 +200,108 @@ medpar.carrier.tx  <- bind_rows ( medpar.tx, carrier.tx)  %>%
 table( medpar.carrier.tx$tx.after.dx, useNA="ifany")
 table( medpar.carrier.tx$tx, medpar.carrier.tx$tx.after.dx, useNA="ifany")
 medpar.carrier.tx.2 <- medpar.carrier.tx %>% filter( tx.after.dx & nna(tx.date) ) 
-A2 <- A %>% right_join(medpar.carrier.tx.2) 
 
+A2 <- A %>% right_join(medpar.carrier.tx.2)  %>% mutate (
+                                 death = death.date,
+                                 tt = as.numeric( if_else ( nna(death.date), death.date, ymd('20191231')  ) - tx.date, units = 'days')
+                                 ) %>% 
+                     filter( tt >0 )
+table( A2$death, useNA="ifany")
+
+                 #TODO: Include tt = 0
+sum(A2$tt == 0 )
+
+
+ # max(ymd(carrier$CLM_THRU_DT)) # 2019-12-32
 
 ################################
 # Merge with negative outcomes 
 ################################
 # Create negative outcomes
 # Get common diagnoses
-outpati.long  <-  outpats[['2017']] %>% select( PATIENT_ID, ICD_DGNS_CD1:ICD_DGNS_E_CD12) %>% pivot_longer(!PATIENT_ID, names_to = 'diagnosis.field', values_to = 'diagnosis.code', values_drop_na = T) 
-conditions  <-  outpati.long %>% filter ( diagnosis.code != "") %>% count(diagnosis.code) %>% arrange(-n)%>% top_n ( 1000) %>% mutate( explanation= explain_table(as.icd10( diagnosis.code),condense=F)$short_desc)
+outpati.long  <-  outpats[['2017']] %>% 
+    select( PATIENT_ID, ICD_DGNS_CD1:ICD_DGNS_E_CD12) %>% 
+    pivot_longer(!PATIENT_ID, 
+                 names_to = 'diagnosis.field', values_to = 'diagnosis.code', 
+                 values_drop_na = T) 
+conditions  <-  outpati.long %>% 
+    filter ( diagnosis.code != "") %>% 
+    count(diagnosis.code) %>% arrange(-n)%>% top_n ( 1000) %>% 
+    mutate( explanation= explain_table(as.icd10( diagnosis.code),condense=F)$short_desc)
 conditions %>% print(n=Inf)
 
+# Create some common lists
 negative.outcomes  <-  list(
         'fall' = c( expand_range('E880','E888'),expand_range('W00', 'W19' )),
         'acute_bronchitis' = c('4660', '4661', sprintf('J20%d',0:9))
 )
 
 
-
-
 # There are two kinds of negative outcomes: 1) Any outcome that occured after the treatment and 2) Any outcome that occured for the first time after the treatment.  Let's focus on the first for now. 
+
+A3  <-  A2
+for (i in 1:length(negative.outcomes) ) {
+    noc.name  <- names(negative.outcomes)[i]
+    noc.codes  <- negative.outcomes[[noc.name]]
+    outpat.noc <- outpat %>% right_join(A2)  %>% 
+         mutate( 
+                noc.temp = find.rows( across(ICD_DGNS_CD1:ICD_DGNS_E_CD12), noc.codes),
+                noc.temp =  if_else(noc.temp & (CLM_FROM_DT > tx.date)& (CLM_FROM_DT < death.date), CLM_FROM_DT, ymd(NA_character_)) ) %>% 
+         group_by(PATIENT_ID) %>% 
+         summarise( !!noc.name := first(na.omit(noc.temp))) %>% 
+         filter(nna(!!rlang::sym(noc.name)))
+     A3 <- A3 %>% left_join(outpat.noc)
+}
+
+#table( as.numeric(A3$fall - A3$tx.date, units = 'days') > A3$tt, useNA="ifany")
+
+
+outcome.name  <-  'fall'
+A4  <-  A3 %>% mutate( 
+                      # Contributing person time until 1) time of outcome, 2) death, or 3) end of follow up. The latter two are in tt
+                      outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt),
+                      outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F))
+#A4  <-  within(A4, tx  <-  relevel(tx, ref = 'sublobar'))
+m  <- glm( (outcome.bool) ~ tx + AGERECODEWITHSINGLEAGES_AND_100+   offset( log(outcome.time) ) , data = A4, family = poisson(link=log))
+summary(m)
+exp(c( coef(m)['txsbrt'], confint(m,'txsbrt'))) # http://www.philender.com/courses/categorical/notes1/pois1.html
+
+
+
+
+
+#TODO: Include the inclusion year
+m  <- glm( (SEERCAUSESPECIFICDEATHCLASSIFIC) ~ tx + offset( log(tt) ) + AGERECODEWITHSINGLEAGES_AND_100 , data = A4, family = poisson(link=log))
+summary(m)
+exp(coef(m))
+
+
+
+A3 %>% 
+    mutate(across(fall:acute_bronchitis, nna))%>%
+    group_by(tx) %>% 
+    summarise( across( 
+                  c('AGERECODEWITHSINGLEAGES_AND_100', 'SEERCAUSESPECIFICDEATHCLASSIFIC', 'fall', 'acute_bronchitis') , ~ mean( .x, na.rm = T))) %>% glimpse
+
+summary(m)
+
+
+# at this point any event is valid, and we just want if it occurred
+outpat.noc.out <- outpat.noc %>% outpat.noc.out
+
+
+table( outpat.noc$fall_, useNA="ifany")
+
+with( outpat.noc, table( nna(fall), (fall_), useNA="ifany"))
+glimpse(outpat.noc %>% filter( nna(fall)))
+
+
+outpat.noc <- outpat.noc %>% mutate( fall = ifelse( 
+
+outpat.noc$fall_date
+table(outpat.noc$fall_date , useNA="ifany")
+
+%>% select( ICD_DGNS_CD1:ICD_DGNS_E_CD12) %>% find.rows (negative.outcomes[['fall']])
 
 print(negative.outcomes)
 
@@ -221,9 +309,7 @@ expand_range('J200', 'J209')
 
 table( outpat$dataset.year, useNA="ifany")
 
-outpat.noc  <- outpat%>% right_join(A2) 
 
-outpat.noc$fall_  <-  outpat.noc %>% select( ICD_DGNS_CD1:ICD_DGNS_E_CD12) %>% find.rows (negative.outcomes[['fall']])
 outpat.noc %>% mutate( fall)
 table( outpat$fall, useNA="ifany")
 
@@ -243,7 +329,6 @@ sum(outpat$CLM_FROM_DT == "")
 
 
 
-A2 %>% group_by(tx) %>% summarise( across( c('AGERECODEWITHSINGLEAGES_AND_100', 'SEERCAUSESPECIFICDEATHCLASSIFIC') , ~ mean( .x, na.rm = T)))
 
 
 
