@@ -18,6 +18,13 @@ find.rows  <- function( haystack, needles) {
     return(found.rows)
 }
 
+find.rows.icdsmart  <- function( haystack, needles, icd9or10) {
+        found.rows.icd9 <- rowSums(sapply(haystack, `%in%`, needles[['icd9']])) > 0
+        found.rows.icd10 <- rowSums(sapply(haystack, `%in%`, needles[['icd10']])) > 0
+        found.rows = (found.rows.icd9 & icd9or10 == 'icd9')  | (found.rows.icd10 & icd9or10 == 'icd10')
+    return(found.rows)
+}
+
 
 get.dates.of.procedure  <-  function( A, proc.codes ) {
     date.cols  <-  A %>% select( SRGCL_PRCDR_PRFRM_1_DT:SRGCL_PRCDR_PRFRM_25_DT) %>% colnames
@@ -49,8 +56,41 @@ get.dates.of.dx  <-  function( A, proc.codes ) {
 }
 
 
+make.OR.plot  <-  function (odds.ratios_, label_list2) {
+    xlims <- c(0.5, 4)
+    g <- ggplot(odds.ratios_, aes(x = estimate, y=y_axis)) + 
+        geom_vline(aes(xintercept = 1), size = 0.25, linetype = "dashed") +
+        geom_errorbarh(aes( xmax = high_ci, xmin = low_ci), size = 0.20, height = 0.3)+
+        geom_point(size=1.5) +
+        theme_bw() +
+        theme(panel.grid.minor = element_blank()) +
+        #scale_y_continuous(breaks = 1:max(odds.ratio$y_axis), labels = unlist(label_list[rownames(odds.ratios__propensity)]), trans='reverse') +
+        scale_y_continuous(breaks = 1:max(odds.ratios_$y_axis), labels = label_list2[row.names(odds.ratios_)], trans='reverse') +
+        #scale_x_continuous(breaks = seq(0,1.4,0.2), limits = xlims ) +
+        scale_x_continuous(limits = xlims ) +
+        coord_trans(x = "log10") +
+        xlab("Incidence Rate Ratio (log scale)") +
+        ylab("") +
+        scale_linetype_manual(values=c("solid","dashed"))+
+        scale_shape_manual(values=c(15,17))+
+        theme( panel.grid.major.x = element_blank() ,
+              panel.grid.major.y = element_line( size=.05, color="grey", linetype = 'dashed' ),
+        legend.position = 'bottom',
+      #  legend.title = element_blank(),
+        legend.key.size=grid::unit(2,"lines")) +
+     ggtitle('Treatment effect of SBRT')
+ g
+}
 
 
+make.odds.ratio.df  <-  function(outcome.names ) {
+    odds.ratios <- as.data.frame(matrix(NA, ncol=3,nrow=length(outcome.names)))
+    rownames(odds.ratios) <- c(outcome.names)
+    colnames(odds.ratios) <- c('estimate','low_ci', 'high_ci')
+    odds.ratios$y_axis <- 1:nrow(odds.ratios)
+    odds.ratios$outcome <- rownames(odds.ratios)
+    odds.ratios
+}
 
 ################################
 # Backup 
