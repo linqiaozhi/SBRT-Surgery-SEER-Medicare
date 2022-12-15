@@ -1,4 +1,4 @@
-install.packages('https://cran.r-project.org/src/contrib/Archive/SAScii/SAScii_1.0.tar.gz', repos=NULL, type="source")
+#install.packages('https://cran.r-project.org/src/contrib/Archive/SAScii/SAScii_1.0.tar.gz', repos=NULL, type="source")
 library(arsenal)
 library('SAScii')
 library(lubridate)
@@ -113,7 +113,7 @@ nna  <-  function ( x) !is.na(x)
 
 topography  <-  read_csv(file= './ICDO3topography.csv') %>% rename(site.topography = description) %>% mutate(PRIMARY_SITE = str_remove_all( icdo3_code, fixed(".")))
 
-A.gt2010 %>% count(sex)
+#A.gt2010 %>% count(sex)
 
 # SEQUENCE_NUMBER, extent of disease width, SURVIVAL_MONTHS, TNM
 A.gt2010  <-  lung.SEER %>% 
@@ -258,13 +258,6 @@ dim(A2)
 A2 %>% count(tx)
 A2 %>% filter(age >=75 ) %>% count(tx)
 
-tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
-f  <-  sprintf( 'tx ~ %s', paste( names(label_list), collapse = "+") )
-labels(A2)  <-  label_list
-tt <- tableby(as.formula(f), data=A2, control = tblcontrol)
-summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars.htm')
-#summary(tt, text=T) %>% as.data.frame %>% write_csv('output/table1.csv')
-getwd()
 
 
 ################################
@@ -292,38 +285,12 @@ if ( ! file.exists (fn.RDS) ) {
     outpat  <-  readRDS(fn.RDS)
 }
 
-
 ################################
 # Merge with negative outcomes 
 ################################
 # Create negative outcomes
-# Get common diagnoses
-#outpati.long  <-  outpats[['2017']] %>% 
-#    select( PATIENT_ID, ICD_DGNS_CD1:ICD_DGNS_E_CD12) %>% 
-#    pivot_longer(!PATIENT_ID, 
-#                 names_to = 'diagnosis.field', values_to = 'diagnosis.code', 
-#                 values_drop_na = T) 
-#conditions  <-  outpati.long %>% 
-#    filter ( diagnosis.code != "") %>% 
-#    count(diagnosis.code) %>% arrange(-n)%>% top_n ( 1000) %>% 
-#    mutate( explanation= explain_table(as.icd10( diagnosis.code),condense=F)$short_desc)
-#conditions %>% print(n=Inf)
 
 # Create some common lists
-negative.outcomes  <-  list(
-        'fall' = list( 
-                      'icd9' = expand_range('E880','E888'),
-                      'icd10' = expand_range('W00', 'W19' )),
-        'acute_bronchitis' = list(
-                                  'icd9'=c('4660', '4661'),
-                                  'icd10' =  sprintf('J20%d',0:9)),
-        'cholelithiasis' = list(
-                            'icd9' = expand_range('5740', '57491'),
-                               'icd10' =  expand_range('K80', 'K8081'))
-)
-print(negative.outcomes)
-
-sink('tbls/negative.outcomes.txt'); print(negative.outcomes); sink()
 
 expand_range('V01', 'V011')
 # There are two kinds of negative outcomes: 1) Any outcome that occured after the treatment and 2) Any outcome that occured for the first time after the treatment.  Let's focus on the first for now. 
@@ -335,6 +302,30 @@ medpar.dx <- medpar %>% select( PATIENT_ID, ADMSN_DT,DSCHRG_DT,  DGNS_1_CD:DGNS_
 outpat.medpar  <-  bind_rows ( outpat, medpar.dx) 
 outpat.medpar$CLM_THRU_DT[  is.na( outpat.medpar$CLM_THRU_DT) ]  =  outpat.medpar$CLM_FROM_DT[  is.na( outpat.medpar$CLM_THRU_DT) ]
 outpat.medpar <- outpat.medpar %>% mutate( icd9or10 = ifelse( CLM_THRU_DT >= ymd('20151001'), 'icd10', 'icd9'  ))
+
+
+
+
+# Get common diagnoses
+outpat.medpar.long.temp  <-  outpat.medpar %>%  filter (  CLM_THRU_DT >= ymd('20151001')) %>% right_join( A2)  %>% 
+    select( PATIENT_ID, ICD_DGNS_CD1:ICD_DGNS_E_CD12) %>% 
+    pivot_longer(!PATIENT_ID, 
+                 names_to = 'diagnosis.field', values_to = 'diagnosis.code', 
+                 values_drop_na = T) 
+
+conditions  <-  outpat.medpar.long.temp %>% 
+    filter ( diagnosis.code != "") %>% 
+    mutate( explanation= explain_table(as.icd10( diagnosis.code),condense=F)$short_desc) %>%
+    group_by(diagnosis.code, explanation) %>%
+    summarise(n = n_distinct(PATIENT_ID)) %>%
+    select(diagnosis.code, n, explanation) %>%
+    arrange(-n)%>%
+    top_n(1000)
+
+conditions %>% write_tsv('tbls/potential.neg.outcomes.tsv')
+conditions %>% print(n=Inf)
+
+
 
 
 
@@ -370,6 +361,36 @@ outpat.medpar <- outpat.medpar %>% mutate( icd9or10 = ifelse( CLM_THRU_DT >= ymd
 #fofo %>% filter(ymd(ADMSN_DT) >ymd('20150101' )) %>% glimpse
 #medpar %>% filter(PATIENT_ID == 'lnK2020w5173227') %>% glimpse
 
+
+negative.outcomes  <-  list(
+    'fall' = list( 
+                  'icd9' = expand_range('E880','E888'),
+                  'icd10' = expand_range('W00', 'W19' )),
+    'acute_bronchitis' = list(
+                              'icd9'=c('4660', '4661'),
+                              'icd10' =  sprintf('J20%d',0:9)),
+    'cholelithiasis' = list(
+                            'icd9' = expand_range('5740', '57491'),
+                            'icd10' =  expand_range('K80', 'K8081')),
+    'gout' = list(
+                            'icd9' = expand_range('2740','2749'),
+                            'icd10' =  expand_range('M100', 'M109')),
+    'diverticular_disease' = list(
+                            'icd9' = expand_range('562','56213' ) ,
+                            'icd10' =  expand_range('K57', 'K5793') ),
+    'hernia' = list(
+                            'icd9' = c( expand_range('550', '5539') ) ,
+                            'icd10' =  expand_range('K40', 'K469') ),
+    'hemorrhoids' = list(
+                            'icd9' = c( expand_range('4550', '4559') ) ,
+                            'icd10' =  expand_range('K640', 'K649') )
+)
+print(negative.outcomes)
+
+sink('tbls/negative.outcomes.txt'); print(negative.outcomes); sink()
+
+
+
 A3  <-  A2
 for (i in 1:length(negative.outcomes) ) {
     noc.name  <- names(negative.outcomes)[i]
@@ -385,13 +406,74 @@ for (i in 1:length(negative.outcomes) ) {
      A3 <- A3 %>% left_join(outpat.noc)
 }
 
+table( nna(A3$hemorrhoids), useNA="ifany")/nrow(A3)
+################################
+# Identify comorbiditis 
+################################
+# First for ICD9
+outpat.medpar.long  <- outpat.medpar  %>% right_join(A2) %>% filter( CLM_FROM_DT < tx.date ) %>% unite("ID_DATE", PATIENT_ID:CLM_FROM_DT, remove = F) %>%  select( ID_DATE, CLM_FROM_DT, ICD_DGNS_CD1:ICD_DGNS_E_CD12 )
+outpat.medpar.long[ outpat.medpar.long == ""] = NA_character_
+
+outpat.medpar.long.icd9  <-  outpat.medpar.long %>% filter ( CLM_FROM_DT < ymd('20151001') ) %>%  select(-CLM_FROM_DT) %>% pivot_longer( !ID_DATE , names_to= NULL, values_to = 'DX', values_drop_na = T) 
+outpat.medpar.quan.deyo.icd9  <-  icd9_comorbid_quan_deyo(outpat.medpar.long.icd9, return_df = T)
+
+outpat.medpar.long.icd10  <-  outpat.medpar.long %>% filter ( CLM_FROM_DT >= ymd('20151001') ) %>%  select(-CLM_FROM_DT) %>% pivot_longer( !ID_DATE , names_to= NULL, values_to = 'DX', values_drop_na = T) 
+outpat.medpar.quan.deyo.icd10  <-  icd10_comorbid_quan_deyo(outpat.medpar.long.icd10, return_df = T)
+
+outpat.medpar.quan.deyo  <-  rbind(outpat.medpar.quan.deyo.icd9,outpat.medpar.quan.deyo.icd10) %>% as_tibble %>% separate (ID_DATE, c("PATIENT_ID", "CLM_FROM_DT"), sep = '_') %>% mutate( CLM_FROM_DT = ymd(CLM_FROM_DT)) %>% arrange( PATIENT_ID, CLM_FROM_DT)
+
+outpat.medpar.quan.deyo.long  <-  outpat.medpar.quan.deyo  %>% replace(. == F, NA) %>% pivot_longer(-c(PATIENT_ID, CLM_FROM_DT), names_to = 'comorbidity', values_to = 'comorbidity.present', values_drop_na = T)
+
+quan.deyo.final  <-  outpat.medpar.quan.deyo.long %>% 
+                group_by(PATIENT_ID, comorbidity) %>% 
+                mutate( time.from.last =  CLM_FROM_DT - first(CLM_FROM_DT)) %>% arrange(PATIENT_ID, comorbidity) %>% 
+# Use this to require at >1 visits at certain time separation
+                #summarise( meets.criteria = max( as.numeric(time.from.last, units='days') ) >= 30 ) %>% 
+                summarise( meets.criteria = T) %>% 
+                filter(meets.criteria) %>%
+                pivot_wider( names_from =comorbidity, values_from = meets.criteria, values_fill = F )  
+
+
+
+# Using pre-filter
+comorbidities  <-  c('DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal', 'Stroke',  'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis', 'HIV')
+A.final  <- A3 %>% left_join(quan.deyo.final)
+A.final[,comorbidities] <- A.final[,comorbidities] %>% mutate_all( coalesce, F)
+sum(is.na(A.final))
+
+tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
+f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list),comorbidities), collapse = "+") )
+labels(A.final)  <-  label_list
+tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
+summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars.htm')
+#summary(tt, text=T) %>% as.data.frame %>% write_csv('output/table1.csv')
+getwd()
+
+
 ################################
 #   Logistic regression #TODO: (will go in separate file)
 ################################
 
 
 
-outcome.names  <-  c( 'death', names(negative.outcomes) ) 
+outcome.names  <-  c( 'death', 'fall', 'acute_bronchitis', 'cholelithiasis', 'diverticular_disease', 'hernia', 'hemorrhoids' ) 
+label_list2  <-  c( label_list,
+                    death = 'Death', 
+                    fall = 'Fall',
+                    acute_bronchitis = 'Acute Bronchitis',
+                    cholelithiasis = 'Cholelithiasis-related',
+                    gout = 'Gout',
+                    obstruction = 'Intestinal obstruction',
+                    hernia = 'Abdominal hernia',
+                    diverticular_disease = 'Diverticular disease',
+                    hemorrhoids = 'Hemorrhoids'
+)
+
+f  <-  sprintf( 'tx ~ %s', paste( sprintf('%s', outcome.names), collapse = "+") )
+A.final.toprint  <- A.final %>% mutate( across(outcome.names, ~ nna(.x)))
+labels(A.final.toprint)  <-  label_list2
+tt <- tableby(as.formula(f), data=A.final.toprint, control = tblcontrol)
+summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/outcomes.htm')
 
 
 odds.ratios  <-  make.odds.ratio.df ( outcome.names) 
@@ -410,17 +492,16 @@ for (outcome.i in 1:length(outcome.names)){
     #print(summary(m))
     odds.ratios[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'], confint(m,'txsbrt'))) 
 }
+g  <-  make.OR.plot(odds.ratios, label_list2)
+ggsave(g, width=8, height=3, filename = 'figs/regression.raw.pdf')
 
 
 # adjusting
-f
-label_list
-adjust.for  <-  c('age', 'sex', 'race', 'marital.status', 'histology',  'tnm.n', 'tnm.m')
-outcome.i  <-  1
+adjust.for  <-  c('age', 'sex', 'race', 'marital.status', 'histology',  'tnm.n', 'tnm.m', comorbidities)
 for (outcome.i in 1:length(outcome.names)){ 
     outcome.name  <-  outcome.names[outcome.i]
     print(outcome.name)
-    A.temp  <-  A3 %>% mutate( 
+    A.temp  <-  A.final %>% mutate( 
                           outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt),
                           outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F))
     f  <-  sprintf( 'outcome.bool ~ tx + %s + offset( log(outcome.time) )',  paste(adjust.for, collapse="+") )
@@ -429,16 +510,7 @@ for (outcome.i in 1:length(outcome.names)){
     print(summary(m))
     odds.ratios.adj[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'], confint(m,'txsbrt'))) 
 }
-warnings()
-
-print(odds.ratios)
-label_list2  <-  c( label_list,
-                    death = 'Death', 
-                    fall = 'Fall',
-                    acute_bronchitis = 'Acute Bronchitis',
-                    cholelithiasis = 'Cholelithiasis-related')
-g  <-  make.OR.plot(odds.ratios, label_list2)
-ggsave(g, width=8, height=3, filename = 'figs/regression.raw.pdf')
+odds.ratios.adj
 
 g  <-  make.OR.plot(odds.ratios.adj, label_list2)
 ggsave(g, width=8, height=3, filename = 'figs/regression.adj.pdf')
