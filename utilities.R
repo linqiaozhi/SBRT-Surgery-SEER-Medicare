@@ -92,6 +92,13 @@ make.odds.ratio.df  <-  function(outcome.names ) {
     odds.ratios
 }
 
+explain_icd9_10  <-  function (dx) {
+    dx.string = explain_table(as.icd10(dx), condense=F)$short_desc
+    dx.string = ifelse (is.na(dx.string) ,  explain_table(as.icd9(dx), condense=F)$short_desc, dx.string)
+    return(dx.string)
+}
+
+nna  <-  function ( x) !is.na(x)
 ################################
 # Backup 
 ################################
