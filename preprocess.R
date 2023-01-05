@@ -427,7 +427,22 @@ print(negative.outcomes)
 sink('tbls/negative.outcomes.txt'); print(negative.outcomes); sink()
 
 
+#A3  <-  A2
+#for (i in 1:length(negative.outcomes) ) {
+#    noc.name  <- names(negative.outcomes)[i]
+#    noc.codes  <- negative.outcomes[[noc.name]]
+#    print(noc.name)
+#    outpat.noc <- outpat.medpar %>% right_join(A2)  %>% 
+#         mutate( 
+#                noc.temp = find.rows.icdsmart( across(ICD_DGNS_CD1:ICD_DGNS_E_CD12), noc.codes, icd9or10),
+#                noc.temp =  if_else(noc.temp & (CLM_FROM_DT > tx.date)& (CLM_FROM_DT < death.date), CLM_FROM_DT, ymd(NA_character_)) ) %>% 
+#         group_by(PATIENT_ID) %>% 
+#         summarise( !!noc.name := first(na.omit(noc.temp))) %>% 
+#         filter(nna(!!rlang::sym(noc.name)))
+#     A3 <- A3 %>% left_join(outpat.noc)
+#}
 
+#TODO: Add _all
 A3  <-  A2
 for (i in 1:length(negative.outcomes) ) {
     noc.name  <- names(negative.outcomes)[i]
@@ -436,14 +451,20 @@ for (i in 1:length(negative.outcomes) ) {
     outpat.noc <- outpat.medpar %>% right_join(A2)  %>% 
          mutate( 
                 noc.temp = find.rows.icdsmart( across(ICD_DGNS_CD1:ICD_DGNS_E_CD12), noc.codes, icd9or10),
-                noc.temp =  if_else(noc.temp & (CLM_FROM_DT > tx.date)& (CLM_FROM_DT < death.date), CLM_FROM_DT, ymd(NA_character_)) ) %>% 
+                noc.temp.pre =  if_else(noc.temp & (CLM_FROM_DT < tx.date)& (CLM_FROM_DT < death.date), CLM_FROM_DT, ymd(NA_character_)), 
+                noc.temp.post =  if_else(noc.temp & (CLM_FROM_DT > tx.date)& (CLM_FROM_DT < death.date), CLM_FROM_DT, ymd(NA_character_))  ,
+                noc.temp.any =  if_else(noc.temp & (CLM_FROM_DT < death.date), CLM_FROM_DT, ymd(NA_character_))  
+                ) %>% 
          group_by(PATIENT_ID) %>% 
-         summarise( !!noc.name := first(na.omit(noc.temp))) %>% 
-         filter(nna(!!rlang::sym(noc.name)))
+         summarise( 
+                      !!noc.name := first(na.omit(noc.temp.post)), 
+                      !!sprintf('%s_pre', noc.name ) := first(na.omit(noc.temp.pre)),
+                      !!sprintf('%s_any', noc.name ) := first(na.omit(noc.temp.any))
+         )
      A3 <- A3 %>% left_join(outpat.noc)
 }
 
-table( nna(A3$hemorrhoids), useNA="ifany")/nrow(A3)
+
 ################################
 # Identify comorbiditis 
 ################################
@@ -518,7 +539,6 @@ summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/out
 
 
 odds.ratios  <-  make.odds.ratio.df ( outcome.names) 
-odds.ratios.adj  <-  make.odds.ratio.df ( outcome.names) 
 # Contributing person time until 1) time of outcome, 2) death, or 3) end of
 # follow up. The latter two are in tt
 
@@ -534,10 +554,12 @@ for (outcome.i in 1:length(outcome.names)){
     odds.ratios[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'], confint(m,'txsbrt'))) 
 }
 g  <-  make.OR.plot(odds.ratios, label_list2)
-ggsave(g, width=8, height=3, filename = 'figs/regression.raw.pdf')
+ggsave(g, width=7, height=2, filename = 'figs/regression.raw.pdf')
 
 
 # adjusting
+
+odds.ratios.adj  <-  make.odds.ratio.df ( outcome.names) 
 adjust.for  <-  c('age', 'sex', 'race', 'marital.status', 'histology', comorbidities)
 for (outcome.i in 1:length(outcome.names)){ 
     outcome.name  <-  outcome.names[outcome.i]
@@ -552,11 +574,79 @@ for (outcome.i in 1:length(outcome.names)){
     odds.ratios.adj[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'], confint(m,'txsbrt'))) 
 }
 odds.ratios.adj
-
 g  <-  make.OR.plot(odds.ratios.adj, label_list2)
 ggsave(g + ggtitle('Treatment effect of SBRT (adjusted)'), width=7, height=2, filename = 'figs/regression.adj.pdf')
 
 
+odds.ratios.expadj  <-  make.odds.ratio.df ( outcome.names) 
+for (outcome.i in 1:length(outcome.names)){ 
+    outcome.name  <-  outcome.names[outcome.i]
+    adjust.for  <-  c('age', 'sex', 'race', 'marital.status', 'histology', comorbidities, sprintf('nna(%s_pre)', names(negative.outcomes)[ names(negative.outcomes) != outcome.name] ))
+    print(outcome.name)
+    A.temp  <-  A.final %>% mutate( 
+                          outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt),
+                          outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F))
+    f  <-  sprintf( 'outcome.bool ~ tx + %s + offset( log(outcome.time) )',  paste(adjust.for, collapse="+") )
+    f
+    m  <- glm( as.formula(f), data = A.temp, family = poisson(link=log))
+    print(summary(m))
+    odds.ratios.expadj[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'], confint(m,'txsbrt'))) 
+}
+odds.ratios.expadj
+g  <-  make.OR.plot(odds.ratios.expadj, label_list2)
+ggsave(g + ggtitle('Treatment effect of SBRT (expanded adjustment)'), width=7, height=2, filename = 'figs/regression.expadj.pdf')
+
+
+
+################################
+# Leaving one out 
+################################
+odds.ratios.expadj2  <-  make.odds.ratio.df ( outcome.names) 
+for (outcome.i in 1:length(outcome.names)){ 
+    outcome.name  <-  outcome.names[outcome.i]
+    adjust.for  <-  c('age', 'sex', 'race', 'marital.status', 'histology', comorbidities, sprintf('nna(%s_any)',  names(negative.outcomes)[ names(negative.outcomes) != outcome.name] ))
+    print(outcome.name)
+    A.temp  <-  A.final %>% mutate( 
+                          outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt),
+                          outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F))
+    f  <-  sprintf( 'outcome.bool ~ tx + %s + offset( log(outcome.time) )',  paste(adjust.for, collapse="+") )
+    f
+    m  <- glm( as.formula(f), data = A.temp, family = poisson(link=log))
+    print(summary(m))
+    odds.ratios.expadj2[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'], confint(m,'txsbrt'))) 
+}
+odds.ratios.expadj2
+
+g  <-  make.OR.plot(odds.ratios.expadj2, label_list2)
+ggsave(g + ggtitle('Treatment effect of SBRT (expanded adjustment)'), width=7, height=2, filename = 'figs/regression.expadj2.pdf')
+
+odds.ratios.adj
+odds.ratios.expadj2
+
+
+
+odds.ratios.anyadj  <-  make.odds.ratio.df ( outcome.names) 
+
+any.outcome.names  <-  c('death', sprintf('%s_any', outcome.names[-1]))
+adjust.for  <-  c('age', 'sex', 'race', 'marital.status', 'histology', comorbidities)
+for (outcome.i in 1:length(any.outcome.names)){ 
+    outcome.name  <-  any.outcome.names[outcome.i]
+    print(outcome.name)
+    A.temp  <-  A.final %>% mutate( 
+                          outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt),
+                          outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F))
+    f  <-  sprintf( 'outcome.bool ~ tx + %s + offset( log(outcome.time) )',  paste(adjust.for, collapse="+") )
+    f
+    m  <- glm( as.formula(f), data = A.temp, family = poisson(link=log))
+    print(summary(m))
+    odds.ratios.anyadj[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'], confint(m,'txsbrt'))) 
+}
+odds.ratios.anyadj
+g  <-  make.OR.plot(odds.ratios.anyadj, label_list2)
+ggsave(g + ggtitle('Treatment effect of SBRT (adjusted)'), width=7, height=2, filename = 'figs/regression.anyoutcome.adj.pdf')
+
+
+table( nna(A.final$acute_bronchitis_any), nna(A.final$acute_bronchitis), useNA="ifany")
 
 #odds.ratios
 #
