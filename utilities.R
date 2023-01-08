@@ -1,4 +1,4 @@
-
+library(ggtext)
 # Codes
 sbrt.icds  <-  c('9230', '9231', '9232', '9233', '9239',
                     'DB22DZ', 'DB22HZZ', 'DB22JZZ')
@@ -77,7 +77,8 @@ make.OR.plot  <-  function (odds.ratios_, label_list2) {
               panel.grid.major.y = element_line( size=.05, color="grey", linetype = 'dashed' ),
         legend.position = 'bottom',
       #  legend.title = element_blank(),
-        legend.key.size=grid::unit(2,"lines")) +
+        legend.key.size=grid::unit(2,"lines"),
+         axis.text.y = ggtext::element_markdown()) +
      ggtitle('Treatment effect of SBRT')
  g
 }
