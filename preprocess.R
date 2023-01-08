@@ -290,10 +290,10 @@ A2 <- A %>% right_join(medpar.carrier.tx.2)  %>% mutate (
                                  tt = as.numeric( if_else ( nna(death.date), death.date, ymd('20191231')  ) - tx.date, units = 'days')
                                  ) %>% 
                      filter( tt >0 )
-#filename.out  <-  'data/A.final.all.RDS'
-#A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0")
-filename.out  <-  'data/A.final.age.gte.80.RDS'
-A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0" & age >= 80 )
+filename.out  <-  'data/A.final.all.RDS'
+A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0")
+#filename.out  <-  'data/A.final.age.gte.80.RDS'
+#A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0" & age >= 80 )
 A2 %>% count(tx)
 A2 %>% filter(age >=80 ) %>% count(tx)
 
@@ -324,15 +324,8 @@ if ( ! file.exists (fn.RDS) ) {
     outpat  <-  readRDS(fn.RDS)
 }
 
-################################
-# Merge with negative outcomes 
-################################
-# Create negative outcomes
 
-# Create some common lists
-
-expand_range('V01', 'V011')
-# There are two kinds of negative outcomes: 1) Any outcome that occured after the treatment and 2) Any outcome that occured for the first time after the treatment.  Let's focus on the first for now. 
+# Combine outpat and medpar
 medpar.dx <- medpar %>% select( PATIENT_ID, ADMSN_DT,DSCHRG_DT,  DGNS_1_CD:DGNS_25_CD) %>% set_names ( ~ str_replace_all(.,"DGNS_", "ICD_DGNS_CD") %>%  str_replace_all(.,"_CD$", "")) %>%
      mutate( CLM_FROM_DT = ymd(ADMSN_DT),
              CLM_THRU_DT = ymd(DSCHRG_DT))
@@ -342,7 +335,54 @@ outpat.medpar$CLM_THRU_DT[  is.na( outpat.medpar$CLM_THRU_DT) ]  =  outpat.medpa
 outpat.medpar <- outpat.medpar %>% mutate( icd9or10 = ifelse( CLM_THRU_DT >= ymd('20151001'), 'icd10', 'icd9'  ))
 
 
+################################
+# Identify comorbiditis 
+################################
 
+# First for ICD9
+outpat.medpar.long  <- outpat.medpar  %>% right_join(A2) %>% filter( CLM_FROM_DT < tx.date ) %>% unite("ID_DATE", PATIENT_ID:CLM_FROM_DT, remove = F) %>%  select( ID_DATE, CLM_FROM_DT, ICD_DGNS_CD1:ICD_DGNS_E_CD12 )
+outpat.medpar.long[ outpat.medpar.long == ""] = NA_character_
+
+outpat.medpar.long.icd9  <-  outpat.medpar.long %>% filter ( CLM_FROM_DT < ymd('20151001') ) %>%  select(-CLM_FROM_DT) %>% pivot_longer( !ID_DATE , names_to= NULL, values_to = 'DX', values_drop_na = T) 
+outpat.medpar.quan.deyo.icd9  <-  icd9_comorbid_quan_deyo(outpat.medpar.long.icd9, return_df = T)
+smoking.hx.icd9  <-  outpat.medpar.long.icd9 %>% filter(DX %in% c( 'V1582', '3051') ) %>% mutate( Smoking = T)
+o2.hx.icd9  <-  outpat.medpar.long.icd9 %>% filter(DX %in% c('V462') ) %>% mutate( o2 = T)
+outpat.medpar.quan.deyo.icd9  <-  outpat.medpar.quan.deyo.icd9 %>% 
+                                    left_join( smoking.hx.icd9 %>% select( - DX )) %>% replace_na( list(Smoking = F)) %>% 
+                                    left_join( o2.hx.icd9 %>% select( - DX )) %>% replace_na( list(o2 = F))
+
+
+outpat.medpar.long.icd10  <-  outpat.medpar.long %>% filter ( CLM_FROM_DT >= ymd('20151001') ) %>%  select(-CLM_FROM_DT) %>% pivot_longer( !ID_DATE , names_to= NULL, values_to = 'DX', values_drop_na = T) 
+outpat.medpar.quan.deyo.icd10  <-  icd10_comorbid_quan_deyo(outpat.medpar.long.icd10, return_df = T)
+smoking.hx.icd10  <-  outpat.medpar.long.icd10 %>% filter(DX %in% c( 'Z87891', expand_range('F17', 'F17299')) ) %>% mutate( Smoking = T)
+o2.hx.icd10  <-  outpat.medpar.long.icd10 %>% filter(DX %in% c('Z9981') ) %>% mutate( o2 = T)
+outpat.medpar.quan.deyo.icd10  <-  outpat.medpar.quan.deyo.icd10 %>% 
+                                        left_join( smoking.hx.icd10 %>% select( - DX )) %>% replace_na( list(Smoking = F)) %>%
+                                        left_join( o2.hx.icd10 %>% select( - DX )) %>% replace_na( list(o2 = F))
+
+outpat.medpar.quan.deyo  <-  rbind(outpat.medpar.quan.deyo.icd9,outpat.medpar.quan.deyo.icd10) %>% as_tibble %>% separate (ID_DATE, c("PATIENT_ID", "CLM_FROM_DT"), sep = '_') %>% mutate( CLM_FROM_DT = ymd(CLM_FROM_DT)) %>% arrange( PATIENT_ID, CLM_FROM_DT)
+
+outpat.medpar.quan.deyo.long  <-  outpat.medpar.quan.deyo  %>% replace(. == F, NA) %>% pivot_longer(-c(PATIENT_ID, CLM_FROM_DT), names_to = 'comorbidity', values_to = 'comorbidity.present', values_drop_na = T)
+
+quan.deyo.final  <-  outpat.medpar.quan.deyo.long %>% 
+                group_by(PATIENT_ID, comorbidity) %>% 
+                mutate( time.from.last =  CLM_FROM_DT - first(CLM_FROM_DT)) %>% arrange(PATIENT_ID, comorbidity) %>% 
+# Use this to require at >1 visits at certain time separation
+                #summarise( meets.criteria = max( as.numeric(time.from.last, units='days') ) >= 30 ) %>% 
+                summarise( meets.criteria = T) %>% 
+                filter(meets.criteria) %>%
+                pivot_wider( names_from =comorbidity, values_from = meets.criteria, values_fill = F )  
+
+
+################################
+# Merge with negative outcomes 
+################################
+# Create negative outcomes
+
+# Create some common lists
+
+expand_range('V01', 'V011')
+# There are two kinds of negative outcomes: 1) Any outcome that occured after the treatment and 2) Any outcome that occured for the first time after the treatment.  Let's focus on the first for now. 
 
 # Get common diagnoses
 outpat.medpar.long.temp  <-  outpat.medpar %>%  filter (  CLM_THRU_DT >= ymd('20151001')) %>% right_join( A2)  %>% 
@@ -404,12 +444,18 @@ negative.outcomes  <-  list(
     'fall' = list( 
                   'icd9' = expand_range('E880','E888'),
                   'icd10' = expand_range('W00', 'W19' )),
+    'other_injury' = list( 
+                  'icd9' = expand_range('800', '999' ),
+                  'icd10' = expand_range('S00','T79')),
     'acute_bronchitis' = list(
                               'icd9'=c('4660', '4661'),
                               'icd10' =  sprintf('J20%d',0:9)),
     'cholelithiasis' = list(
                             'icd9' = expand_range('5740', '57491'),
                             'icd10' =  expand_range('K80', 'K8081')),
+    'oral' = list(
+                            'icd9' = expand_range('520','5299'),
+                            'icd10' =  expand_range('K00', 'K149')),
     'hpb' = list(
                             'icd9' = expand_range('570','578'),
                             'icd10' =  expand_range('K70', 'K87')),
@@ -432,7 +478,6 @@ negative.outcomes  <-  list(
                             'icd9' = c( expand_range('4550', '4559') ) ,
                             'icd10' =  expand_range('K640', 'K649') )
 )
-print(negative.outcomes)
 
 sink('tbls/negative.outcomes.txt'); print(negative.outcomes); sink()
 
@@ -474,46 +519,8 @@ for (i in 1:length(negative.outcomes) ) {
 }
 
 
-################################
-# Identify comorbiditis 
-################################
-# First for ICD9
-outpat.medpar.long  <- outpat.medpar  %>% right_join(A2) %>% filter( CLM_FROM_DT < tx.date ) %>% unite("ID_DATE", PATIENT_ID:CLM_FROM_DT, remove = F) %>%  select( ID_DATE, CLM_FROM_DT, ICD_DGNS_CD1:ICD_DGNS_E_CD12 )
-outpat.medpar.long[ outpat.medpar.long == ""] = NA_character_
 
-outpat.medpar.long.icd9  <-  outpat.medpar.long %>% filter ( CLM_FROM_DT < ymd('20151001') ) %>%  select(-CLM_FROM_DT) %>% pivot_longer( !ID_DATE , names_to= NULL, values_to = 'DX', values_drop_na = T) 
-outpat.medpar.quan.deyo.icd9  <-  icd9_comorbid_quan_deyo(outpat.medpar.long.icd9, return_df = T)
-smoking.hx.icd9  <-  outpat.medpar.long.icd9 %>% filter(DX %in% c( 'V1582', '3051') ) %>% mutate( Smoking = T)
-o2.hx.icd9  <-  outpat.medpar.long.icd9 %>% filter(DX %in% c('V462') ) %>% mutate( o2 = T)
-outpat.medpar.quan.deyo.icd9  <-  outpat.medpar.quan.deyo.icd9 %>% 
-                                    left_join( smoking.hx.icd9 %>% select( - DX )) %>% replace_na( list(Smoking = F)) %>% 
-                                    left_join( o2.hx.icd9 %>% select( - DX )) %>% replace_na( list(o2 = F))
-
-
-outpat.medpar.long.icd10  <-  outpat.medpar.long %>% filter ( CLM_FROM_DT >= ymd('20151001') ) %>%  select(-CLM_FROM_DT) %>% pivot_longer( !ID_DATE , names_to= NULL, values_to = 'DX', values_drop_na = T) 
-outpat.medpar.quan.deyo.icd10  <-  icd10_comorbid_quan_deyo(outpat.medpar.long.icd10, return_df = T)
-smoking.hx.icd10  <-  outpat.medpar.long.icd10 %>% filter(DX %in% c( 'Z87891', expand_range('F17', 'F17299')) ) %>% mutate( Smoking = T)
-o2.hx.icd10  <-  outpat.medpar.long.icd10 %>% filter(DX %in% c('Z9981') ) %>% mutate( o2 = T)
-outpat.medpar.quan.deyo.icd10  <-  outpat.medpar.quan.deyo.icd10 %>% 
-                                        left_join( smoking.hx.icd10 %>% select( - DX )) %>% replace_na( list(Smoking = F)) %>%
-                                        left_join( o2.hx.icd10 %>% select( - DX )) %>% replace_na( list(o2 = F))
-
-outpat.medpar.quan.deyo  <-  rbind(outpat.medpar.quan.deyo.icd9,outpat.medpar.quan.deyo.icd10) %>% as_tibble %>% separate (ID_DATE, c("PATIENT_ID", "CLM_FROM_DT"), sep = '_') %>% mutate( CLM_FROM_DT = ymd(CLM_FROM_DT)) %>% arrange( PATIENT_ID, CLM_FROM_DT)
-
-outpat.medpar.quan.deyo.long  <-  outpat.medpar.quan.deyo  %>% replace(. == F, NA) %>% pivot_longer(-c(PATIENT_ID, CLM_FROM_DT), names_to = 'comorbidity', values_to = 'comorbidity.present', values_drop_na = T)
-
-quan.deyo.final  <-  outpat.medpar.quan.deyo.long %>% 
-                group_by(PATIENT_ID, comorbidity) %>% 
-                mutate( time.from.last =  CLM_FROM_DT - first(CLM_FROM_DT)) %>% arrange(PATIENT_ID, comorbidity) %>% 
-# Use this to require at >1 visits at certain time separation
-                #summarise( meets.criteria = max( as.numeric(time.from.last, units='days') ) >= 30 ) %>% 
-                summarise( meets.criteria = T) %>% 
-                filter(meets.criteria) %>%
-                pivot_wider( names_from =comorbidity, values_from = meets.criteria, values_fill = F )  
-
-
-
-# Using pre-filter
+# Combine with the comorbidities
 comorbidities  <-  c('DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal', 'Stroke',  'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis', 'HIV', 'Smoking', 'o2')
 A.final  <- A3 %>% left_join(quan.deyo.final)
 A.final[,comorbidities] <- A.final[,comorbidities] %>% mutate_all( coalesce, F)
@@ -527,4 +534,5 @@ summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all
 #summary(tt, text=T) %>% as.data.frame %>% write_csv('output/table1.csv')
 getwd()
 write_rds( A.final,filename.out)
+write_rds( label_list,'data/label.list.RDS')
 
