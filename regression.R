@@ -3,8 +3,8 @@ library('ggtext')
 library(arsenal)
 library(ggplot2)
 source('utilities.R')
-# subset.name <- 'age.gte.80'
-subset.name <- 'all'
+subset.name <- 'age.gte.80'
+#subset.name <- 'all'
 filename.in  <-  sprintf('data/A.final.%s.RDS', subset.name)
 A.final  <-  readRDS(filename.in)
 summary( A.final$age)
@@ -63,6 +63,8 @@ ggsave(g1, width=7, height=2, filename = sprintf('figs/regression.raw.%s.pdf', s
 
 odds.ratios.adj  <-  make.odds.ratio.df ( outcome.names) 
 adjust.for  <-  c('age', 'sex', 'race', 'marital.status', 'histology', comorbidities)
+adjust.for  <-  setdiff( c('age', 'sex', 'race', 'marital.status', 'histology', comorbidities) , c('race', 'histology', 'LiverSevere', 'HIV', 'Paralysis'))
+print('WARNING: Removing columns')
 for (outcome.i in 1:length(outcome.names)){ 
     outcome.name  <-  outcome.names[outcome.i]
     print(outcome.name)
@@ -74,11 +76,14 @@ for (outcome.i in 1:length(outcome.names)){
     m  <- glm( as.formula(f), data = A.temp, family = poisson(link=log))
     print(summary(m))
     odds.ratios.adj[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'], confint(m,'txsbrt'))) 
+    #A.temp.colsfiltered  <-  A.temp[, lapply(1:ncol(A.temp), FUN = function(x) min( table(as.data.frame(A.temp)[,x], as.data.frame(A.temp)[,'outcome.bool'])  )) >= 1]
+    #print(setdiff(adjust.for, colnames(A.temp.colsfiltered)))
 }
 odds.ratios.adj
 g2  <-  make.OR.plot(odds.ratios.adj, label_list2)+ ggtitle('B) Treatment effect of SBRT (adjusted)')
 ggsave(g2 , width=7, height=2, filename =sprintf('figs/regression.adj.%s.pdf', subset.name))
 
+# Diagnostics to remove columns which have <3 observations for a level
 
 ################################
 # Leaving one out 
@@ -108,3 +113,6 @@ g  <-  g1 / g2 / g3
 ggsave(g , width=7, height=6, filename =sprintf('figs/regression.%s.pdf', subset.name))
 
 table( nna(A.final$death), useNA="ifany")
+
+
+
