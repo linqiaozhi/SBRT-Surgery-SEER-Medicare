@@ -290,12 +290,14 @@ A2 <- A %>% right_join(medpar.carrier.tx.2)  %>% mutate (
                                  tt = as.numeric( if_else ( nna(death.date), death.date, ymd('20191231')  ) - tx.date, units = 'days')
                                  ) %>% 
                      filter( tt >0 )
-filename.out  <-  'data/A.final.all.RDS'
-A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0")
-#filename.out  <-  'data/A.final.age.gte.80.RDS'
-#A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0" & age >= 80 )
+ filename.out  <-  'data/A.final.all.2.RDS'
+# A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0")
+# filename.out  <-  'data/A.final.age.gte.80.RDS'
+# A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0" & age >= 80 )
+
+#filename.out  <-  'data/A.final.age.65.79.RDS'
+A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0" & age >= 65 & age < 80 )
 A2 %>% count(tx)
-A2 %>% filter(age >=80 ) %>% count(tx)
 
 
 
@@ -430,7 +432,7 @@ conditions %>% print(n=Inf)
 #    mutate( fifi.bool = find.rows( across(  DGNS_1_CD:DGNS_25_CD), c('E889')))
 #fifi %>% filter(fifi.bool) %>%glimpse
 #
-#explain_code_ICD10('E889')
+explain_code_ICD10('E889')
 
 
 
@@ -457,7 +459,7 @@ negative.outcomes  <-  list(
                             'icd9' = expand_range('520','5299'),
                             'icd10' =  expand_range('K00', 'K149')),
     'hpb' = list(
-                            'icd9' = expand_range('570','578'),
+                            'icd9' = expand_range('570','577'),
                             'icd10' =  expand_range('K70', 'K87')),
     'gout' = list(
                             'icd9' = expand_range('2740','2749'),
@@ -467,7 +469,7 @@ negative.outcomes  <-  list(
                             'icd10' = c(  expand_range('M00', 'M19'))),
     'GU_sx' = list(
                             'icd9' = c(expand_range('590', '599'), expand_range('788','78899')),
-                            'icd10' = c(  expand_range('R00', 'R39')), expand_range('N30', 'N39')),
+                            'icd10' = c(  expand_range('R30', 'R39')), expand_range('N30', 'N39')),
     'diverticular_disease' = list(
                             'icd9' = expand_range('562','56213' ) ,
                             'icd10' =  expand_range('K57', 'K5793') ),
@@ -476,10 +478,25 @@ negative.outcomes  <-  list(
                             'icd10' =  expand_range('K40', 'K469') ),
     'hemorrhoids' = list(
                             'icd9' = c( expand_range('4550', '4559') ) ,
-                            'icd10' =  expand_range('K640', 'K649') )
+                            'icd10' =  expand_range('K640', 'K649') ),
+    'optho' = list(
+                            'icd9' = c( expand_range('360', '379') ) ,
+                            'icd10' =  expand_range('H00', 'H59') )
 )
+expand_range('360', '379')
+sink('tbls/negative.outcomes.txt'); 
+for (namei in (names(negative.outcomes))) { 
+    cat(sprintf('Variable Name: %s', namei))
+    print('ICD9')
+    cat(sprintf('%s\n', explain_code(condense=F, as.icd9(negative.outcomes[[namei]][['icd9']]))))
+    print('ICD10')
+    cat(sprintf('%s\n', explain_code(condense=F, as.icd10(negative.outcomes[[namei]][['icd10']]))))
+    cat('------------------------------\n\n\n\n')
+} 
+sink()
 
-sink('tbls/negative.outcomes.txt'); print(negative.outcomes); sink()
+explain_code_icd10
+icd
 
 
 #A3  <-  A2
