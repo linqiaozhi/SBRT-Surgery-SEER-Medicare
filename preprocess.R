@@ -484,13 +484,16 @@ negative.outcomes  <-  list(
                             'icd10' =  expand_range('H00', 'H59') )
 )
 expand_range('360', '379')
+
 sink('tbls/negative.outcomes.txt'); 
 for (namei in (names(negative.outcomes))) { 
     cat(sprintf('Variable Name: %s', namei))
     print('ICD9')
-    cat(sprintf('%s\n', explain_code(condense=F, as.icd9(negative.outcomes[[namei]][['icd9']]))))
+    icd9.codes  <-  negative.outcomes[[namei]][['icd9']]
+    cat(sprintf('%s\n', paste(icd9.codes, explain_code(condense=F, as.icd9(icd9.codes)))))
     print('ICD10')
-    cat(sprintf('%s\n', explain_code(condense=F, as.icd10(negative.outcomes[[namei]][['icd10']]))))
+    icd10.codes  <-  negative.outcomes[[namei]][['icd10']]
+    cat(sprintf('%s\n', paste(icd10.codes, explain_code(condense=F, as.icd10(icd10.codes)))))
     cat('------------------------------\n\n\n\n')
 } 
 sink()
