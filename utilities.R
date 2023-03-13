@@ -56,8 +56,9 @@ get.dates.of.dx  <-  function( A, proc.codes ) {
 }
 
 
-make.OR.plot  <-  function (odds.ratios_, label_list2) {
+make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
     xlims <- c(0.5, 4)
+    tt  <-  ifelse (hazard, 'Hazard Ratio (log scale)', 'Incidence Rate Ratio (log scale)')
     g <- ggplot(odds.ratios_, aes(x = estimate, y=y_axis)) + 
         geom_vline(aes(xintercept = 1), size = 0.25, linetype = "dashed") +
         geom_errorbarh(aes( xmax = high_ci, xmin = low_ci), size = 0.20, height = 0.3)+
@@ -69,7 +70,7 @@ make.OR.plot  <-  function (odds.ratios_, label_list2) {
         #scale_x_continuous(breaks = seq(0,1.4,0.2), limits = xlims ) +
         scale_x_continuous(limits = xlims ) +
         coord_trans(x = "log10") +
-        xlab("Incidence Rate Ratio (log scale)") +
+        xlab(tt) +
         ylab("") +
         scale_linetype_manual(values=c("solid","dashed"))+
         scale_shape_manual(values=c(15,17))+

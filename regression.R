@@ -6,14 +6,14 @@ source('utilities.R')
 #subset.name <- 'age.gte.80'
 subset.name <- 'all'
 filename.in  <-  sprintf('data/A.final.%s.2.RDS', subset.name)
-A.final  <-  readRDS(filename.in)
+A.final  <-  readRDS(filename.in) %>% filter ( race != 'Unknown')
 summary( A.final$age)
 label_list  <-  readRDS('data/label.list.RDS')
 table( nna(A.final$hemorrhoids), useNA="ifany")
 ################################
 #   Logistic regression 
 ################################
-comorbidities  <-  c('DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal', 'Stroke',  'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis', 'HIV', 'Smoking', 'o2')
+comorbidities  <-  c('DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal', 'Stroke',  'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis',  'Smoking', 'o2')
 #negative.outcomes.oi  <-  c( 'fall', 'cholelithiasis', 'diverticular_disease', 'hernia', 'hemorrhoids', 'GU_sx', 'arthropathy', 'hpb' )
 negative.outcomes.oi  <-  c( 'fall',  'other_injury', 'diverticular_disease', 'hernia',  'arthropathy','GU_sx',  'hpb', 'optho' )
 outcome.names  <-  c( 'death',negative.outcomes.oi ) 
@@ -83,6 +83,49 @@ for (outcome.i in 1:length(outcome.names)){
 odds.ratios.adj
 g2  <-  make.OR.plot(odds.ratios.adj, label_list2)+ ggtitle('B) Treatment effect of SBRT (adjusted)')
 ggsave(g2 , width=7, height=2, filename =sprintf('figs/regression.adj.%s.pdf', subset.name))
+
+
+
+################################
+# two step sandbox, with W compiled from multiple 
+################################
+adjust.for  <-  c('age', 'sex', 'race', 'marital.status', 'histology', comorbidities)
+#adjust.for  <-  setdiff( c('age', 'sex', 'race', 'marital.status', 'histology', comorbidities) , c('race', 'histology', 'LiverSevere', 'HIV', 'Paralysis'))
+#print('WARNING: Removing columns')
+#devtools::install_url('https://cran.r-project.org/src/contrib/Archive/instruments/instruments_0.1.0.tar.gz')
+#outcome.names.temp  <-  setdiff(outcome.names, c('fall', 'hernia'))
+#outcome.names.temp  <-  setdiff(outcome.names, c('fall', 'hernia'))
+Z  <-  'optho'
+outcome.names.temp  <-  setdiff(outcome.names, Z)
+odds.ratios.adj  <-  make.odds.ratio.df ( outcome.names.temp) 
+for (outcome.i in 1:length(outcome.names.temp)){ 
+    outcome.name  <-  outcome.names.temp[outcome.i]
+    print(outcome.name)
+    A  <- A.final %>% mutate(W = rowSums( !is.na( across( all_of(outcome.names.temp)))))
+    A.temp  <-  A.final %>% mutate( 
+                          outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt),
+                          outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
+                          W = rowSums( !is.na( across( all_of(outcome.names.temp))))
+    )
+    stage1  <- lm( sprintf('W ~ tx + nna(%s)', Z) , data = A.temp)
+    negative_outcome_pred  <-  predict(stage1)
+    A.temp  <-  A.final %>% mutate( 
+                          outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt),
+                          outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F))
+    f  <-  sprintf( 'outcome.bool ~ tx + negative_outcome_pred + %s + offset( log(outcome.time) )',  paste(adjust.for, collapse="+") )
+    f
+    m  <- glm( as.formula(f), data = cbind(A.temp, negative_outcome_pred), family = poisson(link=log))
+    print(summary(m))
+    odds.ratios.adj[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'], confint(m,'txsbrt'))) 
+    print(odds.ratios.adj[outcome.i,1:3])
+}
+odds.ratios.adj
+g2  <-  make.OR.plot(odds.ratios.adj, label_list2)+ ggtitle(sprintf('C) Treatment effect of SBRT (proximal)\n Z: %s', label_list2[Z]))
+ggsave(g2 , width=7, height=2, filename =sprintf('figs/regression.prox2.%s.pdf', subset.name))
+
+
+
+
 
 
 ################################
