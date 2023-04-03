@@ -84,6 +84,31 @@ make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
  g
 }
 
+make.HD.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
+    xlims <- c(-0.05,0.15)
+    tt  <-  'Hazard Difference'
+    g <- ggplot(odds.ratios_, aes(x = estimate, y=y_axis)) + 
+        geom_vline(aes(xintercept = 0), size = 0.25, linetype = "dashed") +
+        geom_errorbarh(aes( xmax = high_ci, xmin = low_ci), size = 0.20, height = 0.3)+
+        geom_point(size=1.5) +
+        theme_bw() +
+        theme(panel.grid.minor = element_blank()) +
+        scale_y_continuous(breaks = 1:max(odds.ratios_$y_axis), labels = label_list2[row.names(odds.ratios_)], trans='reverse') +
+        scale_x_continuous(limits = xlims ) +
+        #coord_trans(x = "log10") +
+        xlab(tt) +
+        ylab("") +
+        scale_linetype_manual(values=c("solid","dashed"))+
+        scale_shape_manual(values=c(15,17))+
+        theme( panel.grid.major.x = element_blank() ,
+              panel.grid.major.y = element_line( size=.05, color="grey", linetype = 'dashed' ),
+        legend.position = 'bottom',
+      #  legend.title = element_blank(),
+        legend.key.size=grid::unit(2,"lines"),
+         axis.text.y = ggtext::element_markdown()) +
+     ggtitle('Treatment effect of SBRT')
+ g
+}
 
 make.odds.ratio.df  <-  function(outcome.names ) {
     odds.ratios <- as.data.frame(matrix(NA, ncol=3,nrow=length(outcome.names)))
