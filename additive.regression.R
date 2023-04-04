@@ -90,6 +90,7 @@ adjust.for  <-  c('age', 'sex', 'race', 'marital.status', 'histology', comorbidi
 Z  <-  'optho'
 outcome.names.temp  <-  setdiff(outcome.names, Z)
 odds.ratios.adj  <-  make.odds.ratio.df ( outcome.names.temp) 
+outcome.i = 1 
 for (outcome.i in 1:length(outcome.names.temp)){ 
     outcome.name  <-  outcome.names.temp[outcome.i]
     outcome.names.temp2  <-  setdiff(outcome.names.temp, outcome.name)
@@ -102,14 +103,15 @@ for (outcome.i in 1:length(outcome.names.temp)){
                           W = rowSums( !is.na( across( all_of(outcome.names.temp))))
     )
     f  <-  sprintf( 'W ~ tx + nna(%s) + %s', Z,  paste(sprintf('const(%s)', adjust.for), collapse="+") )
-    stage1  <- lm( as.formula(f) , data = A.temp)
-    #stage1  <- lm( sprintf('W ~ tx + nna(%s)', Z) , data = A.temp)
-    negative_outcome_pred  <-  predict(stage1)
+    table( A.temp$W, useNA="ifany")
+    stage1  <- glm( as.formula(f) , family = poisson(link='log'), data = A.temp)
+    negative_outcome_pred  <-  predict(stage1, type = 'link')
     A.temp  <-  A.final %>% mutate( 
                           outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
                           outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F))
     f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + negative_outcome_pred +  %s',  paste(sprintf('const(%s)', adjust.for), collapse="+") )
     m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
+    #fofo  <-  predict.timereg(m, resample.iid=T, newdata = A.temp)
     odds.ratios.adj[outcome.i,1:3]  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
     print(odds.ratios.adj[outcome.i,1:3])
 }
