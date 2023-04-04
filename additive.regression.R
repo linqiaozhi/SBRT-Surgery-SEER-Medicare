@@ -96,11 +96,11 @@ for (outcome.i in 1:length(outcome.names.temp)){
     outcome.names.temp2  <-  setdiff(outcome.names.temp, outcome.name)
     print(outcome.name)
     print(outcome.names.temp2)
-    A  <- A.final %>% mutate(W = rowSums( !is.na( across( all_of(outcome.names.temp)))))
+    #A  <- A.final %>% mutate(W = rowSums( !is.na( across( all_of(outcome.names.temp)))))
     A.temp  <-  A.final %>% mutate( 
                           outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
                           outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
-                          W = rowSums( !is.na( across( all_of(outcome.names.temp))))
+                          W = rowSums( !is.na( across( all_of(outcome.names.temp2))))
     )
     f  <-  sprintf( 'W ~ tx + nna(%s) + %s', Z,  paste(sprintf('const(%s)', adjust.for), collapse="+") )
     table( A.temp$W, useNA="ifany")
