@@ -1,4 +1,6 @@
 library(dplyr)
+library(foreach)
+library(doParallel)
 library(timereg)
 library('ggtext')
 library(arsenal)
@@ -85,39 +87,83 @@ ggsave(g2 , width=7, height=2, filename =sprintf('figs/additive.adj.%s.pdf', sub
 
 ################################
 # two step sandbox, with W compiled from multiple 
+# Bootstrap edition!
 ################################
 adjust.for  <-  c('age', 'sex', 'race', 'marital.status', 'histology', comorbidities)
 Z  <-  'optho'
 outcome.names.temp  <-  setdiff(outcome.names, Z)
 odds.ratios.adj  <-  make.odds.ratio.df ( outcome.names.temp) 
 outcome.i = 1 
+num_cores  <-  detectCores()
+cl  <-  makeCluster(num_cores)
+registerDoParallel(cl)
+B  <-  1000
 for (outcome.i in 1:length(outcome.names.temp)){ 
     outcome.name  <-  outcome.names.temp[outcome.i]
     outcome.names.temp2  <-  setdiff(outcome.names.temp, outcome.name)
     print(outcome.name)
-    print(outcome.names.temp2)
-    #A  <- A.final %>% mutate(W = rowSums( !is.na( across( all_of(outcome.names.temp)))))
-    A.temp  <-  A.final %>% mutate( 
-                          outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
-                          outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
-                          W = rowSums( !is.na( across( all_of(outcome.names.temp2))))
-    )
-    f  <-  sprintf( 'W ~ tx + nna(%s) + %s', Z,  paste(sprintf('const(%s)', adjust.for), collapse="+") )
-    table( A.temp$W, useNA="ifany")
-    stage1  <- glm( as.formula(f) , family = poisson(link='log'), data = A.temp)
-    negative_outcome_pred  <-  predict(stage1, type = 'link')
-    A.temp  <-  A.final %>% mutate( 
-                          outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
-                          outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F))
-    f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + negative_outcome_pred +  %s',  paste(sprintf('const(%s)', adjust.for), collapse="+") )
-    m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
-    #fofo  <-  predict.timereg(m, resample.iid=T, newdata = A.temp)
-    odds.ratios.adj[outcome.i,1:3]  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
-    print(odds.ratios.adj[outcome.i,1:3])
+    boot_samples  <-  foreach (Bi = 1:B , .combine = 'rbind', .packages=c('dplyr', 'timereg')) %dopar% {
+        A.final2  <-  A.final[sample(nrow(A.final),replace=T ),]
+        A.temp  <-  A.final2 %>% mutate( 
+                              outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+                              outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
+                              W = rowSums( !is.na( across( all_of(outcome.names.temp2))))
+        )
+        f  <-  sprintf( 'W ~ tx + nna(%s) + %s', Z,  paste(sprintf('const(%s)', adjust.for), collapse="+") )
+        table( A.temp$W, useNA="ifany")
+        stage1  <- glm( as.formula(f) , family = poisson(link='log'), data = A.temp)
+        negative_outcome_pred  <-  predict(stage1, type = 'link')
+        A.temp  <-  A.final2 %>% mutate( 
+                              outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+                              outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F))
+        f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + negative_outcome_pred +  %s',  paste(sprintf('const(%s)', adjust.for), collapse="+") )
+        m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
+        boot.res  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')])
+        return(boot.res)
+    }
+   odds.ratios.adj[outcome.i,1:3]  <-  c( mean(boot_samples[,1]), quantile(boot_samples[,1], c(0.025, 0.975)) )
+   print(odds.ratios.adj[outcome.i,1:3])
 }
+stopCluster(cl)
 odds.ratios.adj
 g2  <-  make.HD.plot(odds.ratios.adj, label_list2)+ ggtitle(sprintf('C) Treatment effect of SBRT (proximal)\n Z: %s', label_list2[Z]))
-ggsave(g2 , width=7, height=2, filename =sprintf('figs/additive.prox2.%s.pdf', subset.name))
+ggsave(g2 , width=7, height=2, filename =sprintf('figs/additive.prox3.%s.pdf', subset.name))
 
 
+#################################
+## two step sandbox, with W compiled from multiple 
+##No bootstrap
+#################################
+#adjust.for  <-  c('age', 'sex', 'race', 'marital.status', 'histology', comorbidities)
+#Z  <-  'optho'
+#outcome.names.temp  <-  setdiff(outcome.names, Z)
+#odds.ratios.adj  <-  make.odds.ratio.df ( outcome.names.temp) 
+#outcome.i = 1 
+#for (outcome.i in 1:length(outcome.names.temp)){ 
+#    outcome.name  <-  outcome.names.temp[outcome.i]
+#    outcome.names.temp2  <-  setdiff(outcome.names.temp, outcome.name)
+#    print(outcome.name)
+#    print(outcome.names.temp2)
+#    #A  <- A.final %>% mutate(W = rowSums( !is.na( across( all_of(outcome.names.temp)))))
+#    A.temp  <-  A.final %>% mutate( 
+#                          outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+#                          outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
+#                          W = rowSums( !is.na( across( all_of(outcome.names.temp2))))
+#    )
+#    f  <-  sprintf( 'W ~ tx + nna(%s) + %s', Z,  paste(sprintf('const(%s)', adjust.for), collapse="+") )
+#    table( A.temp$W, useNA="ifany")
+#    stage1  <- glm( as.formula(f) , family = poisson(link='log'), data = A.temp)
+#    negative_outcome_pred  <-  predict(stage1, type = 'link')
+#    A.temp  <-  A.final %>% mutate( 
+#                          outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+#                          outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F))
+#    f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + negative_outcome_pred +  %s',  paste(sprintf('const(%s)', adjust.for), collapse="+") )
+#    m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
+#    #fofo  <-  predict.timereg(m, resample.iid=T, newdata = A.temp)
+#    odds.ratios.adj[outcome.i,1:3]  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
+#    print(odds.ratios.adj[outcome.i,1:3])
+#}
+#odds.ratios.adj
+#g2  <-  make.HD.plot(odds.ratios.adj, label_list2)+ ggtitle(sprintf('C) Treatment effect of SBRT (proximal)\n Z: %s', label_list2[Z]))
+#ggsave(g2 , width=7, height=2, filename =sprintf('figs/additive.prox2.%s.pdf', subset.name))
 
