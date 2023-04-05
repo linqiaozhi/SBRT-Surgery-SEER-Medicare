@@ -74,6 +74,7 @@ valid.dxs  <- c( expand_range('1622','1629'), expand_range(as.icd10('C34'), as.i
 # Process the Carrier line files 
 ################################
 
+#TODO: Rerun the SAS
 years  <-  as.character(2010:2019)
 carriers  <-  list()
 for (yeari in 1:length(years)) {
@@ -99,7 +100,6 @@ carrier$valid.dx  <- carrier$LINE_ICD_DGNS_CD %in% valid.dxs
 carrier$sbrt  <-  find.rows( carrier %>% select( HCPCS_CD) , sbrt.cpts ) & carrier$valid.dx
 carrier$sbrt.date  <-  ifelse ( carrier$sbrt, carrier$CLM_THRU_DT,NA_character_) %>% ymd 
 
-glimpse(carrieri)
 # table( (carrier$sbrt), useNA="ifany") # 33,000 SBRTs
 # 
 #     FALSE      TRUE 
@@ -114,7 +114,6 @@ glimpse(carrieri)
 # fofo  <-  find.rows( carrier %>% select( HCPCS_CD) , sublobar.icds )
 # table( fofo, useNA="ifany") # 0
 # No resections in carrier files
-
 
 ################################
 # Process the Carrier base files 
@@ -142,6 +141,7 @@ carrierbase  <-  bind_rows(carrierbases,  .id='dataset.year')
 rm(carrierbases); gc();
 
 
+# explain_code(as.icd9(carrierbase$ICD_DGNS_CD1[1:50]))
 
 ################################
 # Process the DME line files 
@@ -292,14 +292,15 @@ A.gt2010  <-  lung.SEER.first.lc.dx %>% #Use lung.SEER.first.lc.dx
              (size>=5 & size<7) | (tnm.t=='3' & size<7) ~ 'T3',
              (size >=7 & size<100) | tnm.t=='4'  ~ 'T4',
            T ~ NA_character_)
-           
            ) %>% mutate ( 
            dx.date = ymd( ifelse ( nna(YEAR_OF_DIAGNOSIS) & nna(MONTH_OF_DIAGNOSIS) , sprintf('%d%02d15', YEAR_OF_DIAGNOSIS, MONTH_OF_DIAGNOSIS), NA_character_ ) )  ,
            death.date = ymd( ifelse ( ""!=(SEER_DATEOFDEATH_YEAR) & ""!=(SEER_DATEOFDEATH_MONTH) , sprintf('%s%s15', SEER_DATEOFDEATH_YEAR, SEER_DATEOFDEATH_MONTH), NA_character_ ) )  
            ) %>% arrange(dx.date) 
 
+    #TODO: Is it even possible to get 30 day mortality if we don't have the date of death?
+    table( A.gt2010$other.cause.mortality, A.gt2010$cause.specific.mortality, useNA="ifany")
 A.gt2010 %>% count(histology.simple ,histology.cat)%>%arrange(-n) %>% print (n=Inf)
-A.gt2010 %>% group_by(histology.simple) %>% reframe((n()/415741)*100)
+#A.gt2010 %>% group_by(histology.simple) %>% reframe((n()/415741)*100)
 A.gt2010 %>% count() #415,741 Observations
 
 #Double checking new variables that were added  
@@ -308,7 +309,6 @@ A.gt2010 %>% filter(is.na(size)=="TRUE") %>% tally() #181,470 people have missin
 A.gt2010 %>% filter(is.na(TUMOR_SIZE_SUMMARY_2016)=="TRUE", tnm.t==1, YEAR_OF_DIAGNOSIS>2015) %>% tally() #730 people have tnm.t==1 but missing tumor size information
 A.gt2010 %>% filter(is.na(size)=="TRUE", tnm.t==1) %>% group_by(YEAR_OF_DIAGNOSIS) %>% tally() #730 people have tnm.t==1 but missing tumor size information
 miss.t<-A.gt2010 %>% filter(is.na(size)=="TRUE", tnm.t==1, YEAR_OF_DIAGNOSIS>2015) #create dataset of patients with tnm.t=1 but who have missing size information
-View(miss.t)
 table(miss.t$YEAR_OF_DIAGNOSIS, miss.t$seer.surgery) 
 
 #Checking the distribution of TNM T, N, and M staging variables across the years 
@@ -341,8 +341,6 @@ label_list  <-  list(
 
 A   <-  A.gt2010 %>% select(PATIENT_ID, names(label_list) , dx.date, death.date, seer.surgery ) %>% distinct(PATIENT_ID, .keep_all =T) #this no longer changes anything. However, I kept it because everything downstream references 'A'
 
-#TODO: Figure out why there are duplicated entries and be smarter about picking one. About 60,000 out of 495,000 are removed
-#I think one option would be to just restrict to patients with sequence_number==1 (this is what we do in the NCDB typically)
 
 
 #Take a patient who has multiple observations for example
@@ -398,26 +396,25 @@ medpar.carrier.tx.2 %>% group_by(tx) %>% tally()
 ################################
 #  Filter data and add in Thirty and Ninety Day Mortality Based on "tt"
 ################################
+#TODO: Did Alex figure out the censoring?
 A3 <- A2 %>% right_join(medpar.carrier.tx.2)  %>% mutate (
-                                 death = death.date,
-                                 tt = as.numeric( if_else ( nna(death.date), death.date, ymd('20191231')  ) - tx.date, units = 'days')
-                                 ) %>% 
-                     filter( tt >0 ) %>% mutate(thirty.day.mortality= case_when(
-                       tt>=0 & tt<=30 ~ 1,
-                       tt>30  ~ 0,
-                       T ~ NA_integer_),
-                       ninety.day.mortality=case_when(
-                         tt>=0 & tt<=90 ~ 1,
-                         tt>90  ~ 0,
-                         T ~ NA_integer_))
+                                                          death = death.date,
+                                                          tt = as.numeric( if_else ( nna(death.date), death.date, ymd('20191231')  ) - tx.date, units = 'days')
+                                                          ) %>% 
+                                filter( tt >0 ) %>% mutate( 
+                                                           thirty.day.mortality = ifelse ( nna(death.date) & tt < 30, T, F ) ,
+                                                           ninety.day.mortality = ifelse ( nna(death.date) & tt < 90, T, F ) 
+                                    )
 
 A3 %>% count(tx, thirty.day.mortality)
 A3 %>% count(tx, ninety.day.mortality)
 
- filename.out  <-  'data/A.final.all.2.RDS' #This is the final SEER file, combined with medpar and carrier data, with the inclusion criteria applied
+filename.out  <-  'data/A.final.all.3.RDS' #This is the final SEER file, combined with medpar and carrier data, with the inclusion criteria applied
  
  
-# A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0")
+#table( A3$tnm.n, useNA="ifany")
+A3  <-  A3 %>% filter(  tnm.n== "0")
+#A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0")
 # filename.out  <-  'data/A.final.age.gte.80.RDS'
 # A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0" & age >= 80 )
 
@@ -562,7 +559,6 @@ conditions %>% print(n=Inf)
 #    mutate( fifi.bool = find.rows( across(  DGNS_1_CD:DGNS_25_CD), c('E889')))
 #fifi %>% filter(fifi.bool) %>%glimpse
 #
-explain_code_ICD10('E889')
 
 
 
@@ -628,8 +624,6 @@ for (namei in (names(negative.outcomes))) {
 } 
 sink()
 
-explain_code_icd10
-icd
 
 
 #A3  <-  A2
