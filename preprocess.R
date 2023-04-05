@@ -356,7 +356,7 @@ A.gt2010_lc_firstonly %>% group_by(SEQUENCE_NUMBER) %>% tally()
 ################################
 #  Inclusion Criteria 
 ################################
-A2 <-A %>% filter(histology.cat!="Small Cell Carcinoma" & histology.cat!="Other/Unknown"& (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c")) #Restricts to 50,613 Observations
+A2 <-A %>% filter(histology.cat!="Small Cell Carcinoma" & histology.cat!="Other/Unknown"& (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c"), tnm.n==0, tnm.m==0) #Restricts to 34,995 Observations
 
 ################################
 #  Merge SEER with the treatment status
