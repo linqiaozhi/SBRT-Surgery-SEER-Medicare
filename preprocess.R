@@ -7,8 +7,10 @@ library('tidyverse')
 library(haven)
 library(icd)#devtools::install_github("jackwasey/icd")
 source('utilities.R')
+install.packages('data.table')
+library(data.table)
+#data.path  <- 'Z:/data/SEER Medicare Yang/data files'
 data.path  <- '../SEER-Medicare-data/data/SEER_Medicare'
-
 
 ################################
 # Plan: 
@@ -16,6 +18,7 @@ data.path  <- '../SEER-Medicare-data/data/SEER_Medicare'
 # received this as an inpatient .
 #  Carrier lines: One line for each procedure. This is where we obtain the SBRT, which are all done as outpatient procedures. 
 # Carrier base, outpatient, and DME: for diagnoses
+# Carrier lines, outpatient for PET scans 
 ################################
 valid.dxs  <- c( expand_range('1622','1629'), expand_range(as.icd10('C34'), as.icd10('C349')))
 
@@ -23,11 +26,12 @@ valid.dxs  <- c( expand_range('1622','1629'), expand_range(as.icd10('C34'), as.i
 # Load SEER 
 ################################
 
+#lung.SEER <- read_dta('Z:/data/SEER Medicare Yang/data files/SEER files/SEER.lung.cancer.dta')
 lung.SEER <- read_dta('../SEER-Medicare-data/data/SEER_Medicare/SEER.lung.cancer.dta')
 lung.SEER.valid.dx  <-  lung.SEER %>% filter(PRIMARY_SITE %in% valid.dxs) #exclude rows in the dataset corresponding to NON-lung cancer diagnoses (i.e., other cancers)
 lung.SEER.ordered <-  lung.SEER.valid.dx[order(lung.SEER.valid.dx$SEQUENCE_NUMBER, decreasing=FALSE),] #sort by sequence number in ascending order
 lung.SEER.first.lc.dx <- lung.SEER.ordered %>% distinct(PATIENT_ID, .keep_all = TRUE) #keep the lung cancer diagnosis corresponding to the LOWEST sequence number (i.e., their first LC diagnosis)
-lung.SEER.pids <- lung.SEER.ordered %>% filter(YEAR_OF_DIAGNOSIS>=2010 & YEAR_OF_DIAGNOSIS<=2017) %>% select(PATIENT_ID) #restrict to patients diagnosed from 2010-2017; final SEER patient list; gives you a list of 415,741 patients (includes patients with a first primary LC diagnosis)
+lung.SEER.pids <- lung.SEER.first.lc.dx %>% filter(YEAR_OF_DIAGNOSIS>=2010 & YEAR_OF_DIAGNOSIS<=2017) %>% select(PATIENT_ID) #restrict to patients diagnosed from 2010-2017; final SEER patient list; gives you a list of 415,741 patients (includes patients with a first primary LC diagnosis)
 
 
 ################################
@@ -36,6 +40,7 @@ lung.SEER.pids <- lung.SEER.ordered %>% filter(YEAR_OF_DIAGNOSIS>=2010 & YEAR_OF
 year = "2015"
 # unlink(fn.RDS) # to start from scratch
 fn.RDS  <- sprintf('%s/medpar.RDS', data.path)
+#fn.RDS  <- sprintf("Z:/data/SEER Medicare Yang/Data files/Alex's Files/RDS Files/medpar.RDS")
 if ( ! file.exists (fn.RDS) ) {
     medpars  <-  list()
     years  <-  as.character(2009:2019)
@@ -59,7 +64,7 @@ medpar %>% group_by(dataset.year) %>% tally() #check the number of observations 
 
 # The location of the SBRT is not specified, so need to filter to only patients with lung cancer
 medpar <- medpar %>% mutate(actually.lung.cancer = find.rows( across(DGNS_1_CD:DGNS_25_CD), valid.dxs),  sbrt.date = ymd(sbrt.date), sublobar.date = ymd(sublobar.date) ) 
-medpar$sbrt.date[ ! medpar$actually.lung.cancer ]  <- as.Date(NA_character_)
+medpar$sbrt.date[ ! medpar$actually.lung.cancer ]  <- as.Date(NA_Date_)
 
 valid.dxs  <- c( expand_range('1622','1629'), expand_range(as.icd10('C34'), as.icd10('C349')))
 
@@ -79,7 +84,7 @@ years  <-  as.character(2010:2019)
 carriers  <-  list()
 for (yeari in 1:length(years)) {
     year  <-  years[yeari]
-    fn  <-  sprintf('../SEER-Medicare-data/data/SEER_Medicare/nch%s.line.RDS', year)
+    fn  <-  sprintf("Z:/data/SEER Medicare Yang/Data files/Alex's Files/RDS Files/nch%s.line.RDS", year)
     if (!file.exists( fn )) {
         dta.fn  <-  sprintf('../SEER-Medicare-data/data/SEER_Medicare/nch%s.line.dta', year )
         print(sprintf('Reading in %s', dta.fn))
@@ -98,7 +103,11 @@ rm(carriers); gc();
 
 carrier$valid.dx  <- carrier$LINE_ICD_DGNS_CD %in% valid.dxs 
 carrier$sbrt  <-  find.rows( carrier %>% select( HCPCS_CD) , sbrt.cpts ) & carrier$valid.dx
-carrier$sbrt.date  <-  ifelse ( carrier$sbrt, carrier$CLM_THRU_DT,NA_character_) %>% ymd 
+carrier$sbrt.date  <-  ifelse ( carrier$sbrt, carrier$CLM_THRU_DT, NA_character_) %>% ymd 
+
+class(carrier$sbrt.date)
+
+
 
 # table( (carrier$sbrt), useNA="ifany") # 33,000 SBRTs
 # 
@@ -154,14 +163,17 @@ rm(carrierbases); gc();
 #table( dmei$sublobar, useNA="ifany") # 0
 # No SBRT or sublobar resections in in DME files, will not load
 
-
-
+#Checking the DME files for pet scans 
+ #year  <- 2016
+#dmei  <-   read_dta(sprintf('%s/DME files/dme%s.line.dta', data.path, year))
+ #dmei$pet.scan <-  find.rows( dmei %>% select( HCPCS_CD) , pet.scan.cpts )
+ #table(dmei$pet.scan , useNA="ifany")
+ 
+#No pet scans in the DME file
 
 ################################
 # SEER variables 
 ################################
-
-
 
 topography  <-  read_csv(file= './ICDO3topography.csv') %>% rename(site.topography = description) %>% mutate(PRIMARY_SITE = str_remove_all( icdo3_code, fixed(".")))
 
@@ -342,7 +354,6 @@ label_list  <-  list(
 A   <-  A.gt2010 %>% select(PATIENT_ID, names(label_list) , dx.date, death.date, seer.surgery ) %>% distinct(PATIENT_ID, .keep_all =T) #this no longer changes anything. However, I kept it because everything downstream references 'A'
 
 
-
 #Take a patient who has multiple observations for example
 A.gt2010 %>% filter(PATIENT_ID=='lnK2020w0045894') %>% group_by(SEQUENCE_NUMBER, PRIMARY_SITE) %>% tally() %>% spread(PRIMARY_SITE, n) #patient has three primary cancers
 A.gt2010 %>% filter(PATIENT_ID=='lnK2020w0196859') %>% group_by(SEQUENCE_NUMBER, PRIMARY_SITE) %>% tally() %>% spread(PRIMARY_SITE, n) #patient has two primary cancers
@@ -357,6 +368,8 @@ A.gt2010_lc_firstonly %>% group_by(SEQUENCE_NUMBER) %>% tally()
 #  Inclusion Criteria 
 ################################
 A2 <-A %>% filter(histology.cat!="Small Cell Carcinoma" & histology.cat!="Other/Unknown"& (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c"), tnm.n==0, tnm.m==0) #Restricts to 34,995 Observations
+A2 %>% count()
+A2 %>% count(YEAR_OF_DIAGNOSIS)
 
 ################################
 #  Merge SEER with the treatment status
@@ -365,6 +378,10 @@ A2 <-A %>% filter(histology.cat!="Small Cell Carcinoma" & histology.cat!="Other/
 # from both Medpar and carrier. We bind them into one first, and then merge.
 medpar.tx  <-   medpar %>% select ( PATIENT_ID, sbrt.date, sublobar.date) %>% filter(!is.na(sbrt.date) | !is.na(sublobar.date) )
 carrier.tx  <-  carrier %>% select(PATIENT_ID, sbrt.date) %>% filter(!is.na(sbrt.date))
+
+class(medpar.tx$sbrt.date)
+class(carrier.tx$sbrt.date)
+
 #medpar.carrier.tx  <-  bind_rows ( medpar.tx, carrier.tx)
 
 # Running these summarize statements on all hundreds of thousands of SEER patients does not make sense, but we 
@@ -393,8 +410,9 @@ medpar.carrier.tx  <- bind_rows ( medpar.tx, carrier.tx) %>%
 medpar.carrier.tx.2 <- medpar.carrier.tx %>% filter( tx.after.dx & nna(tx.date) ) 
 
 medpar.carrier.tx.2 %>% group_by(tx) %>% tally()
+
 ################################
-#  Filter data and add in Thirty and Ninety Day Mortality Based on "tt"
+#  Filter data, add in Thirty and Ninety Day Mortality Based on "tt" 
 ################################
 #TODO: Did Alex figure out the censoring?
 A3 <- A2 %>% right_join(medpar.carrier.tx.2)  %>% mutate (
@@ -409,11 +427,99 @@ A3 <- A2 %>% right_join(medpar.carrier.tx.2)  %>% mutate (
 A3 %>% count(tx, thirty.day.mortality)
 A3 %>% count(tx, ninety.day.mortality)
 
-filename.out  <-  'data/A.final.all.3.RDS' #This is the final SEER file, combined with medpar and carrier data, with the inclusion criteria applied
- 
- 
+
+#####################################
+# Process the Outpatient Revenue file
+#####################################
+#outpati  <-   read_dta("Z:/data/SEER Medicare Yang/Data files/Outpatient files/outpat2014.revenue.dta")
+#outpati$pet.scan<- find.rows(outpati %>% select(HCPCS_CD), pet.scan.cpts) #find rows with pet scans and label them as "pet scans"
+#outpati %>% count(pet.scan) #there are pet scans in outpatient revenue
+
+
+fn.RDS  <- sprintf("Z:/data/SEER Medicare Yang/Data files/Alex's Files/RDS Files/outpat.revenue.RDS")
+if ( ! file.exists (fn.RDS) ) {
+  revenue.outpats  <-  list()
+  years  <-  as.character(2010:2019)
+  for (yeari in 1:length(years)) {
+    year  <-  years[yeari]
+    print(year)
+    revenue.outpati  <-   read_dta(sprintf('%s/Outpatient files/outpat%s.revenue.dta', data.path, year), col_select=c('PATIENT_ID', 'CLM_THRU_DT', 'HCPCS_CD'))
+    # inner join with the SEER patients to reduce size
+    revenue.outpats[[year]]  <-  revenue.outpati %>% 
+      inner_join(lung.SEER.pids) 
+  }
+  outpat.revenue  <-  bind_rows(revenue.outpats,  .id='dataset.year')
+  outpat.revenue  <-  outpat.revenue %>% mutate(CLM_THRU_DT = ymd(CLM_THRU_DT))
+  saveRDS(object = outpat.revenue, file = fn.RDS) 
+}else{
+  outpat.revenue  <-  readRDS(fn.RDS)
+}
+
+
+#Extracting Pet Scans from the Carrier Line File and Revenue File and adding them to A3
+pet.scan.cpts <-c('78811', '78812', '78813', '78814', '78815', '78816', 'G0235')
+
+carrier$pet.scan <-find.rows(carrier %>% select(HCPCS_CD), pet.scan.cpts) #all rows corresponding to PET scan in the carrier line file
+carrier$pet.scan.date<-ifelse(carrier$pet.scan, carrier$CLM_THRU_DT, NA_Date_) %>% ymd #date of PET scan in the carrier line file
+carrier %>% count(pet.scan) 
+carrier %>% filter(pet.scan==TRUE) %>% select(CLM_THRU_DT, pet.scan.date) %>% head()
+
+outpat.revenue$pet.scan <-find.rows(outpat.revenue %>% select(HCPCS_CD), pet.scan.cpts) #all rows corresponding to PET scan in the carrier line file
+outpat.revenue$pet.scan.date<-fifelse(outpat.revenue$pet.scan, outpat.revenue$CLM_THRU_DT, NA_Date_) #date of PET scan in the carrier line file
+outpat.revenue %>% count(pet.scan) 
+outpat.revenue %>% filter(pet.scan==TRUE) %>% select(CLM_THRU_DT, pet.scan.date) %>% head()
+
+pet.scans.carrier<-carrier %>% filter(pet.scan==TRUE) %>% select(pet.scan.date, pet.scan, PATIENT_ID) 
+pet.scans.outpatient.revenue <- outpat.revenue %>% filter(pet.scan==TRUE) %>% select(pet.scan.date, pet.scan, PATIENT_ID)
+pet.scans.total<-bind_rows(pet.scans.carrier, pet.scans.outpatient.revenue)
+pet.scans.total %>% count()
+
+A1_petscan<-A3 %>% left_join(pet.scans.total) %>% #left joined to pet scans (keeps patients with and without a pet scan)
+   select(pet.scan.date, pet.scan, tx.date, PATIENT_ID, tx)
+  
+A1_petscan %>% count(pet.scan, tx) #25214 observations
+
+A1_petscan$days.between.pet.and.treatment <- ifelse(A1_petscan$pet.scan == TRUE, A1_petscan$tx.date - A1_petscan$pet.scan.date, NA_character_) 
+
+ggplot(A1_petscan, aes(x=days.between.pet.and.treatment)) + geom_histogram() + theme_classic()  #positive if treatment happened AFTER the pet scan; NA if no pet scan
+  
+A1_petscan %>% count(pet.scan)
+
+A2_petscan<-A1_petscan %>% mutate(pet.scan.on.time=case_when(
+  days.between.pet.and.treatment>=0 & days.between.pet.and.treatment<=360 ~ 1,
+  T~0),
+  days.pet.treatment=case_when(
+    pet.scan.on.time==1 ~days.between.pet.and.treatment, 
+    T~NA_integer_
+  ))
+
+ggplot(A2_petscan, aes(x= days.pet.treatment)) + geom_histogram() + theme_classic()  #positive if treatment happened AFTER the pet scan; NA if no pet scan
+
+
+A2_petscan %>% count(pet.scan.on.time, tx)  #Received a pet scan during the year BEFORE treatment
+
+A3_petscan <- A2_petscan %>% filter(pet.scan.on.time==TRUE) 
+A4_petscan <- A3_petscan[order(A3_petscan$days.pet.treatment, decreasing=FALSE),]
+A4_petscan %>% count(pet.scan.on.time, tx)
+A5_petscan <- A4_petscan %>% distinct(PATIENT_ID, .keep_all = TRUE)
+A5_petscan %>% count(pet.scan.on.time, tx)
+
+A4 <- A5_petscan %>% right_join(A3)
+A4 %>% count(pet.scan.on.time, tx)
+
+A4$pet.scan.y.or.n<-case_when(
+  A4$pet.scan.on.time==1 ~ 1,
+  T~0
+)
+
+A4 %>% group_by(tx) %>% summarize(sum(pet.scan.y.or.n)/n()) #low rates of pet scan use (59.1% among sublobar; 93.6% among sbrt)
+
+filename.out  <-  'data/A.final.all.4.RDS' #This is the final SEER file, combined with medpar and carrier data, with the inclusion criteria applied
+saveRDS(A4, filename.out)
+
+
 #table( A3$tnm.n, useNA="ifany")
-A3  <-  A3 %>% filter(  tnm.n== "0")
+A4  <-  A4 %>% filter(  tnm.n== "0")
 #A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0")
 # filename.out  <-  'data/A.final.age.gte.80.RDS'
 # A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0" & age >= 80 )
@@ -423,25 +529,27 @@ A3  <-  A3 %>% filter(  tnm.n== "0")
  
 #A2<-A.final 
 #A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0" & age >= 65 & age < 80 )
-A3 %>% count(tx)
+A4 %>% count(tx)
 
 
 ################################
 # Process the  Outpatient files
 ################################
-#outpati  <-   read_dta('../SEER-Medicare-data/data/SEER_Medicare/outpat2014.base.dta')
 
-fn.RDS  <- sprintf('%s/outpat.base.RDS', data.path)
+#BASE 
+outpati  <-   read_dta("Z:/data/SEER Medicare Yang/Data files/Outpatient files/outpat2014.base.dta")
+
+fn.RDS  <- sprintf("Z:/data/SEER Medicare Yang/Data files/Alex's Files/RDS Files/outpat.base.RDS")
 if ( ! file.exists (fn.RDS) ) {
     outpats  <-  list()
     years  <-  as.character(2010:2019)
     for (yeari in 1:length(years)) {
         year  <-  years[yeari]
         print(year)
-        outpati  <-   read_dta(sprintf('%s/outpat%s.base.dta', data.path, year), col_select=c('PATIENT_ID', 'CLM_FROM_DT', 'CLM_THRU_DT', PRNCPAL_DGNS_CD:PRCDR_DT25))
+        outpati  <-   read_dta(sprintf('%s/Outpatient files/outpat%s.base.dta', data.path, year), col_select=c('PATIENT_ID', 'CLM_FROM_DT', 'CLM_THRU_DT', PRNCPAL_DGNS_CD:PRCDR_DT25))
         # inner join with the SEER patients to reduce size
         outpats[[year]]  <-  outpati %>% 
-            inner_join(lung.SEER.pids) %>%select( ! contains( "PRCDR_DT"))
+            inner_join(lung.SEER.pids) %>%select( ! contains( "PRCDR_DT")) 
     }
     outpat  <-  bind_rows(outpats,  .id='dataset.year')
     outpat  <-  outpat %>% mutate( CLM_FROM_DT = ymd(CLM_FROM_DT), CLM_THRU_DT = ymd(CLM_THRU_DT))
@@ -450,6 +558,18 @@ if ( ! file.exists (fn.RDS) ) {
     outpat  <-  readRDS(fn.RDS)
 }
 
+View(outpat)
+
+outpati %>% count(ICD_PRCDR_CD1)
+
+
+pet.scan.cpts <-c('78811', '78812', '78813', '78814', '78815', '78816', 'G0235')
+outpati %>% mutate(pet.scan = find.rows(across(ICD_PRCDR_CD1:ICD_PRCDR_CD25), pet.scan.cpts)) #find rows with pet scans and label them as "pet scans"
+outpat %>% count(pet.scan)
+outpat$pet.scan.date<-ifelse(outpat$pet.scan, outpat$CLM_THRU_DT, NA_character_) %>% ymd
+
+
+#Combine carrier (line) and outpatient (base) to 
 
 # Combine outpat and medpar
 medpar.dx <- medpar %>% select( PATIENT_ID, ADMSN_DT,DSCHRG_DT,  DGNS_1_CD:DGNS_25_CD) %>% set_names ( ~ str_replace_all(.,"DGNS_", "ICD_DGNS_CD") %>%  str_replace_all(.,"_CD$", "")) %>%
@@ -467,7 +587,7 @@ outpat.medpar <- outpat.medpar %>% mutate( icd9or10 = ifelse( CLM_THRU_DT >= ymd
 ################################
 
 # First for ICD9
-outpat.medpar.long  <- outpat.medpar  %>% right_join(A3) %>% filter( CLM_FROM_DT < tx.date ) %>% unite("ID_DATE", PATIENT_ID:CLM_FROM_DT, remove = F) %>%  select( ID_DATE, CLM_FROM_DT, ICD_DGNS_CD1:ICD_DGNS_E_CD12 )
+outpat.medpar.long  <- outpat.medpar  %>% right_join(A4) %>% filter( CLM_FROM_DT < tx.date ) %>% unite("ID_DATE", PATIENT_ID:CLM_FROM_DT, remove = F) %>%  select( ID_DATE, CLM_FROM_DT, ICD_DGNS_CD1:ICD_DGNS_E_CD12 )
 outpat.medpar.long[ outpat.medpar.long == ""] = NA_character_
 
 
@@ -514,7 +634,7 @@ expand_range('V01', 'V011')
 # There are two kinds of negative outcomes: 1) Any outcome that occured after the treatment and 2) Any outcome that occured for the first time after the treatment.  Let's focus on the first for now. 
 
 # Get common diagnoses
-outpat.medpar.long.temp  <-  outpat.medpar %>%  filter (  CLM_THRU_DT >= ymd('20151001')) %>% right_join( A3)  %>% 
+outpat.medpar.long.temp  <-  outpat.medpar %>%  filter (  CLM_THRU_DT >= ymd('20151001')) %>% right_join( A4)  %>% 
     select( PATIENT_ID, ICD_DGNS_CD1:ICD_DGNS_E_CD12) %>% 
     pivot_longer(!PATIENT_ID, 
                  names_to = 'diagnosis.field', values_to = 'diagnosis.code', 
@@ -641,12 +761,12 @@ sink()
 #     A3 <- A3 %>% left_join(outpat.noc)
 #}
 
-A4  <-  A3
+A5  <-  A4
 for (i in 1:length(negative.outcomes) ) {
     noc.name  <- names(negative.outcomes)[i]
     noc.codes  <- negative.outcomes[[noc.name]]
     print(noc.name)
-    outpat.noc <- outpat.medpar %>% right_join(A3)  %>% 
+    outpat.noc <- outpat.medpar %>% right_join(A4)  %>% 
          mutate( 
                 noc.temp = find.rows.icdsmart( across(ICD_DGNS_CD1:ICD_DGNS_E_CD12), noc.codes, icd9or10),
                 noc.temp.pre =  if_else(noc.temp & (CLM_FROM_DT < tx.date)& (CLM_FROM_DT < death.date), CLM_FROM_DT, ymd(NA_character_)), 
@@ -659,14 +779,14 @@ for (i in 1:length(negative.outcomes) ) {
                       !!sprintf('%s_pre', noc.name ) := first(na.omit(noc.temp.pre)),
                       !!sprintf('%s_any', noc.name ) := first(na.omit(noc.temp.any))
          )
-     A4 <- A4 %>% left_join(outpat.noc)
+     A5 <- A5 %>% left_join(outpat.noc)
 }
 
 
 
 # Combine with the comorbidities
 comorbidities  <-  c('DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal', 'Stroke',  'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis', 'HIV', 'Smoking', 'o2')
-A.final  <- A4 %>% left_join(quan.deyo.final)
+A.final  <- A5 %>% left_join(quan.deyo.final)
 A.final[,comorbidities] <- A.final[,comorbidities] %>% mutate_all( coalesce, F)
 #sum(is.na(A.final))
 
