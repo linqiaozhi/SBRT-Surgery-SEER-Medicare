@@ -459,7 +459,7 @@ A_try3<-A_try2 %>% mutate(death.y.n.mbsf=case_when(
     T~NA_integer_)
   )
 
-A_try3 %>% count(death.y.n.mbsf, death.y.n.seer) 
+A_try3 %>% filter(!is.na(death.y.n.seer) | !is.na(death.y.n.mbsf)) %>% count(death.y.n.mbsf, death.y.n.seer, VALID_DEATH_DT_SW) 
 A_try3 %>% filter(!is.na(death.y.n.seer), is.na(death.y.n.mbsf)) %>% select(death.date.mbsf, death.date) %>% head() #patients with a death in SEER but NOT the MBSF (n=9)
 A_try3 %>% filter(is.na(death.y.n.seer), !is.na(death.y.n.mbsf)) %>% select(death.date.mbsf, death.date) %>% head() #patients with a death in the MBSF but NOT SEER (n=507)
 
