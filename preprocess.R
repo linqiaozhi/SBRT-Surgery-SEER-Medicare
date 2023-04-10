@@ -412,6 +412,58 @@ medpar.carrier.tx.2 <- medpar.carrier.tx %>% filter( tx.after.dx & nna(tx.date) 
 medpar.carrier.tx.2 %>% group_by(tx) %>% tally()
 
 ################################
+#  Check the MBSF File For Deaths
+################################
+#mbsfi<-read_dta("Z:/data/SEER Medicare Yang/Data files/MBSF files/mbsf.abcd.summary.2019.dta")
+#mbsfi$death.date<-ifelse(mbsfi$BENE_DEATH_DT!= "", mbsfi$BENE_DEATH_DT, NA_Date_) %>% ymd()
+#mbsfi %>% filter(nna(death.date)) %>% select(death.date) %>% head()
+#mbsfi$death.y.or.n<-ifelse(nna(mbsfi$death.date), 1, NA_character_ ) #61,231 patients with a "death date" in the 2019 MBSF File
+#mbsfi %>% count(death.y.or.n, VALID_DEATH_DT_SW) #All but 28 of these patients have had their death verified by the Social Security Administration or the Railroad Retirement Board 
+#mbsfi %>% filter(death.y.or.n==1) %>% select(BENE_DEATH_DT) %>% head()
+
+fn.RDS  <- sprintf("Z:/data/SEER Medicare Yang/Data files/Alex's Files/RDS Files/MBSF.RDS")
+if ( ! file.exists (fn.RDS) ) {
+  mbsfs  <-  list()
+  years  <-  as.character(2010:2019)
+  for (yeari in 1:length(years)) {
+    year  <-  years[yeari]
+    print(year)
+    mbsfi  <-   read_dta(sprintf('%s/MBSF files/mbsf.abcd.summary.%s.dta', data.path, year), col_select=c('PATIENT_ID', 'BENE_DEATH_DT', 'VALID_DEATH_DT_SW'))
+    # inner join with the SEER patients to reduce size
+    mbsfs[[year]]  <-  mbsfi %>% 
+      inner_join(lung.SEER.pids) 
+  }
+  mbsf <-  bind_rows(mbsfs,  .id='dataset.year')
+  saveRDS(object = mbsf, file = fn.RDS) 
+}else{
+  mbsf  <-  readRDS(fn.RDS)
+}
+
+#Create a date of death in the mbsf file
+mbsf$death.date.mbsf<-ifelse(mbsf$BENE_DEATH_DT!= "", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd()
+mbsf %>% filter(nna(death.date.mbsf)) %>% select(death.date.mbsf) %>% head()
+mbsf.deaths.only <- mbsf %>% filter(nna(death.date.mbsf))
+mbsf.deaths.only %>% count()
+
+A_try2<- mbsf.deaths.only %>% right_join(A4)
+A_try2 %>% count
+A4 %>% count()
+A_try2 %>% filter(nna(death.date.mbsf)) %>% select(death.date.mbsf, death.date) %>% head() #MBSF has the day and the month
+
+#Compare the number of deaths between the MBSF and SEER 
+A_try3<-A_try2 %>% mutate(death.y.n.mbsf=case_when(
+  nna(death.date.mbsf) ~ 1,
+  T~NA_integer_),
+  death.y.n.seer=case_when(
+    nna(death.date) ~ 1,
+    T~NA_integer_)
+  )
+
+A_try3 %>% count(death.y.n.mbsf, death.y.n.seer) 
+A_try3 %>% filter(!is.na(death.y.n.seer), is.na(death.y.n.mbsf)) %>% select(death.date.mbsf, death.date) %>% head() #patients with a death in SEER but NOT the MBSF (n=9)
+A_try3 %>% filter(is.na(death.y.n.seer), !is.na(death.y.n.mbsf)) %>% select(death.date.mbsf, death.date) %>% head() #patients with a death in the MBSF but NOT SEER (n=507)
+
+################################
 #  Filter data, add in Thirty and Ninety Day Mortality Based on "tt" 
 ################################
 #TODO: Did Alex figure out the censoring?
