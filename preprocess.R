@@ -352,7 +352,7 @@ label_list  <-  list(
 
 
 A   <-  A.gt2010 %>% select(PATIENT_ID, names(label_list) , dx.date, death.date, seer.surgery ) %>% distinct(PATIENT_ID, .keep_all =T) #this no longer changes anything. However, I kept it because everything downstream references 'A'
-
+A2 <- A
 
 #Take a patient who has multiple observations for example
 A.gt2010 %>% filter(PATIENT_ID=='lnK2020w0045894') %>% group_by(SEQUENCE_NUMBER, PRIMARY_SITE) %>% tally() %>% spread(PRIMARY_SITE, n) #patient has three primary cancers
@@ -363,13 +363,8 @@ A.gt2010_lc_ordered <-A.gt2010_lc[order(A.gt2010_lc$SEQUENCE_NUMBER, decreasing=
 A.gt2010_lc_firstonly <- A.gt2010_lc_ordered %>% distinct(PATIENT_ID, .keep_all = T) #goes from 440247 to 426195 by removing additional lung cancers diagnosed after the first lung cancer
 A.gt2010_lc_firstonly %>% group_by(SEQUENCE_NUMBER) %>% tally()
 
+A.gt2010 %>% count(YEAR_OF_LAST_FOLLOW_UP_RECODE)
 
-################################
-#  Inclusion Criteria 
-################################
-A2 <-A %>% filter(histology.cat!="Small Cell Carcinoma" & histology.cat!="Other/Unknown"& (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c"), tnm.n==0, tnm.m==0) #Restricts to 34,995 Observations
-A2 %>% count()
-A2 %>% count(YEAR_OF_DIAGNOSIS)
 
 ################################
 #  Merge SEER with the treatment status
@@ -439,7 +434,7 @@ if ( ! file.exists (fn.RDS) ) {
   mbsf  <-  readRDS(fn.RDS)
 }
 
-#Create a date of death in the mbsf file
+#Create a date of death in the mbsf file (Note that the below data manipulation uses A4, which is created further down in this file)
 mbsf$death.date.mbsf<-ifelse(mbsf$BENE_DEATH_DT!= "", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd()
 mbsf %>% filter(nna(death.date.mbsf)) %>% select(death.date.mbsf) %>% head()
 mbsf.deaths.only <- mbsf %>% filter(nna(death.date.mbsf))
@@ -462,14 +457,24 @@ A_try3<-A_try2 %>% mutate(death.y.n.mbsf=case_when(
 A_try3 %>% filter(!is.na(death.y.n.seer) | !is.na(death.y.n.mbsf)) %>% count(death.y.n.mbsf, death.y.n.seer, VALID_DEATH_DT_SW) 
 A_try3 %>% filter(!is.na(death.y.n.seer), is.na(death.y.n.mbsf)) %>% select(death.date.mbsf, death.date) %>% head() #patients with a death in SEER but NOT the MBSF (n=9)
 A_try3 %>% filter(is.na(death.y.n.seer), !is.na(death.y.n.mbsf)) %>% select(death.date.mbsf, death.date) %>% head() #patients with a death in the MBSF but NOT SEER (n=507)
+A_try3$death.discordant <- ifelse((A_try3$death.y.n.mbsf == A_try3$death.y.n.seer)| (A_try3$death.y.n.mbsf==1 & grepl('2019', A_try3$death.date.mbsf) | (is.na(A_try3$death.y.n.mbsf) & is.na(A_try3$death.y.n.seer))) , 'Concordant', 'Disconcordant')
+A_try3 %>% count(death.discordant, death.y.n.mbsf, death.y.n.seer) #There are 11 patients with disconcordant death dates between the MBSF and the SEER file; these patients will be excluded.
+
+A_try3$end.of.follow.up<-fifelse(nna(A_try3$death.date.mbsf), A_try3$death.date.mbsf, as.Date("20191231", format="%Y%m%d")) #this variable is a work in progress and will eventually account for patients who are no longer enrolled in medicare
+A_try3 %>% select(end.of.follow.up, death.date.mbsf) %>% filter(is.na(death.date.mbsf)) %>% head() 
+
+
+updated.death.data <- A_try3 %>% select(death.discordant, death.y.n.mbsf, death.y.n.seer, death.date.mbsf, PATIENT_ID) #This is the data frame that will be merged with the overall SEER file 
+updated.death.data %>% count()
 
 ################################
 #  Filter data, add in Thirty and Ninety Day Mortality Based on "tt" 
 ################################
 #TODO: Did Alex figure out the censoring?
-A3 <- A2 %>% right_join(medpar.carrier.tx.2)  %>% mutate (
-                                                          death = death.date,
-                                                          tt = as.numeric( if_else ( nna(death.date), death.date, ymd('20191231')  ) - tx.date, units = 'days')
+A3 <- A2 %>% right_join(medpar.carrier.tx.2, A_try3)  %>% mutate (
+                                                          death = death.date.mbsf,
+                                                          #tt.old = as.numeric( if_else ( nna(death.date), death.date, ymd('20191231')  ) - tx.date, units = 'days'),
+                                                          tt = as.numeric(end.of.follow.up - tx.date, units = 'days')
                                                           ) %>% 
                                 filter( tt >0 ) %>% mutate( 
                                                            thirty.day.mortality = ifelse ( nna(death.date) & tt < 30, T, F ) ,
@@ -477,7 +482,7 @@ A3 <- A2 %>% right_join(medpar.carrier.tx.2)  %>% mutate (
                                     )
 
 A3 %>% count(tx, thirty.day.mortality)
-A3 %>% count(tx, ninety.day.mortality)
+A3 %>% count(tx, ninety.day.mortality) 
 
 
 #####################################
@@ -564,7 +569,7 @@ A4$pet.scan.y.or.n<-case_when(
   T~0
 )
 
-A4 %>% group_by(tx) %>% summarize(sum(pet.scan.y.or.n)/n()) #low rates of pet scan use (59.1% among sublobar; 93.6% among sbrt)
+A4 %>% group_by(tx) %>% summarize(sum(pet.scan.y.or.n)/n()) #low rates of pet scan use (59.1% among sublobar; 93.6% among sbrt) 
 
 filename.out  <-  'data/A.final.all.4.RDS' #This is the final SEER file, combined with medpar and carrier data, with the inclusion criteria applied
 saveRDS(A4, filename.out)
@@ -582,6 +587,18 @@ A4  <-  A4 %>% filter(  tnm.n== "0")
 #A2<-A.final 
 #A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0" & age >= 65 & age < 80 )
 A4 %>% count(tx)
+
+
+################################
+#  Inclusion Criteria 
+################################
+A5<-A4 %>% inner_join(updated.death.data) #inner join with death data from the MBSF
+A5 %>% count(tx) 
+
+A6 <-A5 %>% filter(histology.cat!="Small Cell Carcinoma" & histology.cat!="Other/Unknown"& (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c") & tnm.n==0 & tnm.m==0 & ((pet.scan.y.or.n==1 & tx=='sbrt') | tx=='sublobar'), death.discordant=='Concordant') 
+A6 %>% count(tx) #7001 sublobar; 1177 SBRT
+
+A6 %>% count(YEAR_OF_DIAGNOSIS, tx)
 
 
 ################################
@@ -639,7 +656,7 @@ outpat.medpar <- outpat.medpar %>% mutate( icd9or10 = ifelse( CLM_THRU_DT >= ymd
 ################################
 
 # First for ICD9
-outpat.medpar.long  <- outpat.medpar  %>% right_join(A4) %>% filter( CLM_FROM_DT < tx.date ) %>% unite("ID_DATE", PATIENT_ID:CLM_FROM_DT, remove = F) %>%  select( ID_DATE, CLM_FROM_DT, ICD_DGNS_CD1:ICD_DGNS_E_CD12 )
+outpat.medpar.long  <- outpat.medpar  %>% right_join(A6) %>% filter( CLM_FROM_DT < tx.date ) %>% unite("ID_DATE", PATIENT_ID:CLM_FROM_DT, remove = F) %>%  select( ID_DATE, CLM_FROM_DT, ICD_DGNS_CD1:ICD_DGNS_E_CD12 )
 outpat.medpar.long[ outpat.medpar.long == ""] = NA_character_
 
 
@@ -686,7 +703,7 @@ expand_range('V01', 'V011')
 # There are two kinds of negative outcomes: 1) Any outcome that occured after the treatment and 2) Any outcome that occured for the first time after the treatment.  Let's focus on the first for now. 
 
 # Get common diagnoses
-outpat.medpar.long.temp  <-  outpat.medpar %>%  filter (  CLM_THRU_DT >= ymd('20151001')) %>% right_join( A4)  %>% 
+outpat.medpar.long.temp  <-  outpat.medpar %>%  filter (  CLM_THRU_DT >= ymd('20151001')) %>% right_join( A6)  %>% 
     select( PATIENT_ID, ICD_DGNS_CD1:ICD_DGNS_E_CD12) %>% 
     pivot_longer(!PATIENT_ID, 
                  names_to = 'diagnosis.field', values_to = 'diagnosis.code', 
@@ -703,8 +720,6 @@ conditions  <-  outpat.medpar.long.temp %>%
 
 conditions %>% write_tsv('tbls/potential.neg.outcomes.tsv')
 conditions %>% print(n=Inf)
-
-
 
 
 
@@ -813,7 +828,7 @@ sink()
 #     A3 <- A3 %>% left_join(outpat.noc)
 #}
 
-A5  <-  A4
+A7  <-  A6
 for (i in 1:length(negative.outcomes) ) {
     noc.name  <- names(negative.outcomes)[i]
     noc.codes  <- negative.outcomes[[noc.name]]
@@ -831,14 +846,14 @@ for (i in 1:length(negative.outcomes) ) {
                       !!sprintf('%s_pre', noc.name ) := first(na.omit(noc.temp.pre)),
                       !!sprintf('%s_any', noc.name ) := first(na.omit(noc.temp.any))
          )
-     A5 <- A5 %>% left_join(outpat.noc)
+     A7 <- A7 %>% left_join(outpat.noc)
 }
 
 
 
 # Combine with the comorbidities
 comorbidities  <-  c('DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal', 'Stroke',  'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis', 'HIV', 'Smoking', 'o2')
-A.final  <- A5 %>% left_join(quan.deyo.final)
+A.final  <- A7 %>% left_join(quan.deyo.final)
 A.final[,comorbidities] <- A.final[,comorbidities] %>% mutate_all( coalesce, F)
 #sum(is.na(A.final))
 
