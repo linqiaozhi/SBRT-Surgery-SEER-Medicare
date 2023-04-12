@@ -48,6 +48,7 @@ if ( ! file.exists (fn.RDS) ) {
         medpars[[year]]  <-  medpari %>% inner_join(lung.SEER.pids) 
         medpars[[year]]$sbrt.date  <-  get.dates.of.procedure( medpars[[year]], sbrt.icds  )
         medpars[[year]]$sublobar.date  <-  get.dates.of.procedure( medpars[[year]], sublobar.icds  )
+        medpars[[year]]$other.resection.date  <-  get.dates.of.procedure( medpars[[year]], other.resection.icds  )
         #medpars[[year]] <-   medpars[[year]]  %>% filter( !is.na(sbrt.date) | !is.na(sublobar.date)  )
     }
     medpar  <-  bind_rows(medpars ,  .id='dataset.year')
@@ -59,7 +60,7 @@ if ( ! file.exists (fn.RDS) ) {
 medpar %>% group_by(dataset.year) %>% tally() #check the number of observations per year
 
 # The location of the SBRT is not specified, so need to filter to only patients with lung cancer
-medpar <- medpar %>% mutate(actually.lung.cancer = find.rows( across(DGNS_1_CD:DGNS_25_CD), valid.dxs),  sbrt.date = ymd(sbrt.date), sublobar.date = ymd(sublobar.date) ) 
+medpar <- medpar %>% mutate(actually.lung.cancer = find.rows( across(DGNS_1_CD:DGNS_25_CD), valid.dxs),  sbrt.date = ymd(sbrt.date), sublobar.date = ymd(sublobar.date), other.resection.date = ymd(other.resection.date) ) 
 medpar$sbrt.date[ ! medpar$actually.lung.cancer ]  <- as.Date(NA_Date_)
 
 #fofo <- medpar %>% mutate( sbrt.date = ymd(sbrt.date), sublobar.date = ymd(sublobar.date),)
@@ -362,7 +363,7 @@ A   <-  A.gt2010 %>% select(PATIENT_ID, names(label_list) , dx.date, death.date,
 ################################
 # Determine the treatment. Sublobar date comes from Medpar, and SBRT date comes
 # from both Medpar and carrier. We bind them into one first, and then merge.
-medpar.tx  <-   medpar %>% select ( PATIENT_ID, sbrt.date, sublobar.date) %>% filter(!is.na(sbrt.date) | !is.na(sublobar.date) )
+medpar.tx  <-   medpar %>% select ( PATIENT_ID, sbrt.date, sublobar.date, other.resection.date) %>% filter(!is.na(sbrt.date) | !is.na(sublobar.date) )
 carrier.tx  <-  carrier %>% select(PATIENT_ID, sbrt.date) %>% filter(!is.na(sbrt.date))
 
 class(medpar.tx$sbrt.date)
@@ -388,14 +389,16 @@ medpar.carrier.tx  <- bind_rows ( medpar.tx, carrier.tx) %>%
                                     tx == 'sbrt' ~ first(sbrt.date),
                                     tx == 'sublobar' ~ first(sublobar.date),
                                     T ~ ymd(NA_character_)
-                                    ) ) %>%
-               mutate( tx.after.dx = tx.date > dx.date)
+                                    ),
+               other.resection.date = first(other.resection.date),
+               ) %>% 
+    mutate( tx.after.dx = tx.date > dx.date, other.resection.before.tx = other.resection.date < tx.date)
 
+table( medpar.carrier.tx$other.resection.before.tx , useNA="ifany")
 #table( medpar.carrier.tx$tx.after.dx, useNA="ifany")
 #table( medpar.carrier.tx$tx, medpar.carrier.tx$tx.after.dx, useNA="ifany")
-medpar.carrier.tx.2 <- medpar.carrier.tx %>% filter( tx.after.dx & nna(tx.date) ) 
+medpar.carrier.tx.2 <- medpar.carrier.tx %>% filter( tx.after.dx & nna(tx.date)  & ! other.resection.before.tx ) 
 
-medpar.carrier.tx.2 %>% group_by(tx) %>% tally()
 
 ################################
 #  Process the MBSF file for death and censoring
@@ -464,12 +467,12 @@ A2<- mbsf.deaths.only %>% right_join(A)  %>%
 #TODO: Did Alex figure out the censoring?
 A3 <- A2 %>% right_join(medpar.carrier.tx.2)  %>% mutate (
                                                           death = death.date.mbsf,
-                                                          tt = as.numeric( if_else ( nna(death.date), death.date, ymd('20191231')  ) - tx.date, units = 'days'),
+                                                          tt = as.numeric( if_else ( nna(death.date.mbsf), death.date, ymd('20191231')  ) - tx.date, units = 'days'),
                                                           #tt = as.numeric(end.of.follow.up - tx.date, units = 'days')
                                                           ) %>% 
                                 filter( tt >0 ) %>% mutate( 
-                                                           thirty.day.mortality = ifelse ( nna(death.date) & tt < 30, T, F ) ,
-                                                           ninety.day.mortality = ifelse ( nna(death.date) & tt < 90, T, F ) 
+                                                           thirty.day.mortality = ifelse ( nna(death.date.mbsf) & tt < 30, T, F ) ,
+                                                           ninety.day.mortality = ifelse ( nna(death.date.mbsf) & tt < 90, T, F ) 
                                     )
 
 
@@ -510,80 +513,42 @@ pet.scan.cpts <-c('78811', '78812', '78813', '78814', '78815', '78816', 'G0235')
 
 carrier$pet.scan <-find.rows(carrier %>% select(HCPCS_CD), pet.scan.cpts) #all rows corresponding to PET scan in the carrier line file
 carrier$pet.scan.date<-ifelse(carrier$pet.scan, carrier$CLM_THRU_DT, NA_Date_) %>% ymd #date of PET scan in the carrier line file
-carrier %>% count(pet.scan) 
-carrier %>% filter(pet.scan==TRUE) %>% select(CLM_THRU_DT, pet.scan.date) %>% head()
 
 outpat.revenue$pet.scan <-find.rows(outpat.revenue %>% select(HCPCS_CD), pet.scan.cpts) #all rows corresponding to PET scan in the carrier line file
 outpat.revenue$pet.scan.date<-fifelse(outpat.revenue$pet.scan, outpat.revenue$CLM_THRU_DT, NA_Date_) #date of PET scan in the carrier line file
-outpat.revenue %>% count(pet.scan) 
-outpat.revenue %>% filter(pet.scan==TRUE) %>% select(CLM_THRU_DT, pet.scan.date) %>% head()
 
 pet.scans.carrier<-carrier %>% filter(pet.scan==TRUE) %>% select(pet.scan.date, pet.scan, PATIENT_ID) 
 pet.scans.outpatient.revenue <- outpat.revenue %>% filter(pet.scan==TRUE) %>% select(pet.scan.date, pet.scan, PATIENT_ID)
 pet.scans.total<-bind_rows(pet.scans.carrier, pet.scans.outpatient.revenue)
-pet.scans.total %>% count()
-
-A1_petscan<-A3 %>% left_join(pet.scans.total) %>% #left joined to pet scans (keeps patients with and without a pet scan)
-   select(pet.scan.date, pet.scan, tx.date, PATIENT_ID, tx)
-  
-A1_petscan %>% count(pet.scan, tx) #25214 observations
-
-A1_petscan$days.between.pet.and.treatment <- ifelse(A1_petscan$pet.scan == TRUE, A1_petscan$tx.date - A1_petscan$pet.scan.date, NA_character_) 
-
-# ggplot(A1_petscan, aes(x=days.between.pet.and.treatment)) + geom_histogram() + theme_classic()  #positive if treatment happened AFTER the pet scan; NA if no pet scan
-  
-A1_petscan %>% count(pet.scan)
-
-A2_petscan<-A1_petscan %>% mutate(pet.scan.on.time=case_when(
-  days.between.pet.and.treatment>=0 & days.between.pet.and.treatment<=360 ~ 1,
-  T~0),
-  days.pet.treatment=case_when(
-    pet.scan.on.time==1 ~days.between.pet.and.treatment, 
-    T~NA_integer_
-  ))
-
-# ggplot(A2_petscan, aes(x= days.pet.treatment)) + geom_histogram() + theme_classic()  #positive if treatment happened AFTER the pet scan; NA if no pet scan
 
 
-A2_petscan %>% count(pet.scan.on.time, tx)  #Received a pet scan during the year BEFORE treatment
-
-A3_petscan <- A2_petscan %>% filter(pet.scan.on.time==TRUE) 
-A4_petscan <- A3_petscan[order(A3_petscan$days.pet.treatment, decreasing=FALSE),]
-A4_petscan %>% count(pet.scan.on.time, tx)
-A5_petscan <- A4_petscan %>% distinct(PATIENT_ID, .keep_all = TRUE)
-A5_petscan %>% count(pet.scan.on.time, tx)
-
-A4 <- A5_petscan %>% right_join(A3)
-A4 %>% count(pet.scan.on.time, tx)
-
-A4$pet.scan.y.or.n<-case_when(
-  A4$pet.scan.on.time==1 ~ 1,
-  T~0
-)
-
-A4 %>% group_by(tx) %>% summarize(sum(pet.scan.y.or.n)/n()) #low rates of pet scan use (59.1% among sublobar; 93.6% among sbrt) 
+pre.tx.PETs <-A3 %>% right_join(pet.scans.total) %>% filter(nna(tx)) %>%
+    select(pet.scan.date, pet.scan, tx.date, PATIENT_ID, tx) %>% 
+    mutate( 
+           days.between.pet.and.treatment =  tx.date - pet.scan.date,
+           pet.scan.within.year = days.between.pet.and.treatment>=0 & days.between.pet.and.treatment<=360
+           ) %>%
+    group_by (PATIENT_ID) %>% summarise(   pre.tx.PET = any(pet.scan.within.year)  )
 
 
+A4  <- A3 %>% left_join(pre.tx.PETs)
 
-#table( A3$tnm.n, useNA="ifany")
-A4  <-  A4 %>% filter(  tnm.n== "0")
-#A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0")
-# filename.out  <-  'data/A.final.age.gte.80.RDS'
-# A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0" & age >= 80 )
+A4 %>% count ( tx, pre.tx.PET)
 
-#filename.out  <-  'data/A.final.age.65.79.RDS'
- 
- 
-#A2<-A.final 
-#A2  <-  A2 %>% filter( tnm.t == "1" &  primary.site == "Lung" & tnm.n== "0" & tnm.m =="0" & age >= 65 & age < 80 )
-A4 %>% count(tx)
 
 
 ################################
 #  Inclusion Criteria 
 ################################
 
-A5 <-A4 %>% filter(histology.cat!="Small Cell Carcinoma" & histology.cat!="Other/Unknown"& (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c") & tnm.n==0 & tnm.m==0 & ((pet.scan.y.or.n==1 & tx=='sbrt') | tx=='sublobar'), death.discordant=='Concordant') 
+A5 <-A4 %>% filter(
+                   histology.cat!="Small Cell Carcinoma" & histology.cat!="Other/Unknown"& (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c") & tnm.n==0 & tnm.m==0 & 
+                       ((pre.tx.PET & tx=='sbrt') | tx=='sublobar' )   &
+                        valid.death.indicator=='valid') 
+
+A5 %>% count ( tx, pre.tx.PET)
+
+
 A5 %>% count(tx) #7001 sublobar; 1177 SBRT
 
 A5 %>% count(YEAR_OF_DIAGNOSIS, tx)
