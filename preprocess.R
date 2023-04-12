@@ -39,8 +39,8 @@ lung.SEER.pids <- lung.SEER.first.lc.dx %>% filter(YEAR_OF_DIAGNOSIS>=2010 & YEA
 ################################
 year = "2015"
 # unlink(fn.RDS) # to start from scratch
-fn.RDS  <- sprintf('%s/medpar.RDS', data.path)
-#fn.RDS  <- sprintf("Z:/data/SEER Medicare Yang/Data files/Alex's Files/RDS Files/medpar.RDS")
+#fn.RDS  <- sprintf('%s/medpar.RDS', data.path)
+fn.RDS  <- sprintf("Z:/data/SEER Medicare Yang/Data files/Alex's Files/RDS Files/medpar.RDS")
 if ( ! file.exists (fn.RDS) ) {
     medpars  <-  list()
     years  <-  as.character(2009:2019)
@@ -423,7 +423,7 @@ if ( ! file.exists (fn.RDS) ) {
   for (yeari in 1:length(years)) {
     year  <-  years[yeari]
     print(year)
-    mbsfi  <-   read_dta(sprintf('%s/MBSF files/mbsf.abcd.summary.%s.dta', data.path, year), col_select=c('PATIENT_ID', 'BENE_DEATH_DT', 'VALID_DEATH_DT_SW'))
+    mbsfi  <-   read_dta(sprintf('%s/MBSF files/mbsf.abcd.summary.%s.dta', data.path, year), col_select=c('PATIENT_ID', 'BENE_DEATH_DT', 'VALID_DEATH_DT_SW', 'BENE_PTA_TRMNTN_CD', 'BENE_PTB_TRMNTN_CD', 'BENE_HI_CVRAGE_TOT_MONS', 'BENE_SMI_CVRAGE_TOT_MONS', 'BENE_ENROLLMT_REF_YR'))
     # inner join with the SEER patients to reduce size
     mbsfs[[year]]  <-  mbsfi %>% 
       inner_join(lung.SEER.pids) 
@@ -433,6 +433,7 @@ if ( ! file.exists (fn.RDS) ) {
 }else{
   mbsf  <-  readRDS(fn.RDS)
 }
+
 
 #Create a date of death in the mbsf file 
 mbsf$death.date.mbsf<-ifelse(mbsf$BENE_DEATH_DT!= "", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd()
@@ -467,6 +468,30 @@ A_try3 %>% select(end.of.follow.up, death.date.mbsf) %>% filter(is.na(death.date
 updated.death.data <- A_try3 %>% select(death.discordant, death.y.n.mbsf, death.y.n.seer, death.date.mbsf, PATIENT_ID) #This is the data frame that will be merged with the overall SEER file 
 updated.death.data %>% count()
 
+##Looking at patients who unenrolled (work in progress)
+mbsf.small <- mbsf %>% inner_join(A.final.all.4) %>% select(tx.date, dataset.year, death.date.mbsf, death.y.n.mbsf, PATIENT_ID, BENE_ENROLLMT_REF_YR, BENE_PTA_TRMNTN_CD, BENE_PTB_TRMNTN_CD, BENE_HI_CVRAGE_TOT_MONS, BENE_SMI_CVRAGE_TOT_MONS)
+
+mbsf.small %>% filter(BENE_PTA_TRMNTN_CD>=2 & BENE_PTA_TRMNTN_CD<=9) %>% select(PATIENT_ID, dataset.year)
+mbsf.small %>% filter(PATIENT_ID=="lnK2020x0446203") %>% select(tx.date, death.date.mbsf, dataset.year, BENE_PTA_TRMNTN_CD, BENE_PTB_TRMNTN_CD, BENE_HI_CVRAGE_TOT_MONS, BENE_SMI_CVRAGE_TOT_MONS) #this patient never died but unenrolled in 2010; they had 11 months of coverage
+mbsf.small %>% filter(PATIENT_ID=="lnK2020x7610704") %>% select(tx.date, death.date.mbsf,dataset.year, BENE_PTA_TRMNTN_CD, BENE_PTB_TRMNTN_CD, BENE_HI_CVRAGE_TOT_MONS, BENE_SMI_CVRAGE_TOT_MONS) 
+mbsf.small %>% filter(PATIENT_ID=="lnK2020x7610704") %>% select(tx.date, death.date.mbsf,dataset.year, BENE_PTA_TRMNTN_CD, BENE_PTB_TRMNTN_CD, BENE_HI_CVRAGE_TOT_MONS, BENE_SMI_CVRAGE_TOT_MONS) 
+
+mbsf.small$enroll.2010<-ifelse(s$`2010`, )
+
+mbsf.ids <- mbsf.small %>% select(PATIENT_ID, dataset.year)
+s<-split(mbsf.ids, mbsf.ids$dataset.year) 
+s$`2019`
+
+pid.list.2019<-c(s$`2019`$PATIENT_ID)
+pid.list.2018<-c(s$`2018`$PATIENT_ID)
+pid.list.2017<-c(s$`2017`$PATIENT_ID)
+
+mbsf.small$enroll.2019 <- ifelse(mbsf.small$PATIENT_ID %in% pid.list.2019, TRUE, FALSE)
+mbsf.small$enroll.2018 <- ifelse(mbsf.small$PATIENT_ID %in% pid.list.2018, TRUE, FALSE)
+mbsf.small$enroll.2017 <- ifelse(mbsf.small$PATIENT_ID %in% pid.list.2017, TRUE, FALSE)
+
+mbsf.small %>% count(enroll.2017, enroll.2018, enroll.2019)
+
 ################################
 #  Filter data, add in Thirty and Ninety Day Mortality Based on "tt" 
 ################################
@@ -480,6 +505,7 @@ A3 <- A2 %>% right_join(medpar.carrier.tx.2, A_try3)  %>% mutate (
                                                            thirty.day.mortality = ifelse ( nna(death.date) & tt < 30, T, F ) ,
                                                            ninety.day.mortality = ifelse ( nna(death.date) & tt < 90, T, F ) 
                                     )
+
 
 A3 %>% count(tx, thirty.day.mortality)
 A3 %>% count(tx, ninety.day.mortality) 
