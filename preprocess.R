@@ -7,10 +7,8 @@ library('tidyverse')
 library(haven)
 library(icd)#devtools::install_github("jackwasey/icd")
 source('utilities.R')
-install.packages('data.table')
 library(data.table)
-#data.path  <- 'Z:/data/SEER Medicare Yang/data files'
-data.path  <- '../SEER-Medicare-data/data/SEER_Medicare'
+source('file.paths.R')
 
 ################################
 # Plan: 
@@ -26,8 +24,7 @@ valid.dxs  <- c( expand_range('1622','1629'), expand_range(as.icd10('C34'), as.i
 # Load SEER 
 ################################
 
-#lung.SEER <- read_dta('Z:/data/SEER Medicare Yang/data files/SEER files/SEER.lung.cancer.dta')
-lung.SEER <- read_dta('../SEER-Medicare-data/data/SEER_Medicare/SEER.lung.cancer.dta')
+lung.SEER <- read_dta(sprintf('%s/SEER.lung.cancer.dta', dta.path))
 lung.SEER.valid.dx  <-  lung.SEER %>% filter(PRIMARY_SITE %in% valid.dxs) #exclude rows in the dataset corresponding to NON-lung cancer diagnoses (i.e., other cancers)
 lung.SEER.ordered <-  lung.SEER.valid.dx[order(lung.SEER.valid.dx$SEQUENCE_NUMBER, decreasing=FALSE),] #sort by sequence number in ascending order
 lung.SEER.first.lc.dx <- lung.SEER.ordered %>% distinct(PATIENT_ID, .keep_all = TRUE) #keep the lung cancer diagnosis corresponding to the LOWEST sequence number (i.e., their first LC diagnosis)
@@ -38,9 +35,8 @@ lung.SEER.pids <- lung.SEER.first.lc.dx %>% filter(YEAR_OF_DIAGNOSIS>=2010 & YEA
 # Process the Medpar files
 ################################
 year = "2015"
+fn.RDS  <- sprintf('%s/medpar.RDS', rds.path)
 # unlink(fn.RDS) # to start from scratch
-#fn.RDS  <- sprintf('%s/medpar.RDS', data.path)
-fn.RDS  <- sprintf("Z:/data/SEER Medicare Yang/Data files/Alex's Files/RDS Files/medpar.RDS")
 if ( ! file.exists (fn.RDS) ) {
     medpars  <-  list()
     years  <-  as.character(2009:2019)
@@ -66,10 +62,6 @@ medpar %>% group_by(dataset.year) %>% tally() #check the number of observations 
 medpar <- medpar %>% mutate(actually.lung.cancer = find.rows( across(DGNS_1_CD:DGNS_25_CD), valid.dxs),  sbrt.date = ymd(sbrt.date), sublobar.date = ymd(sublobar.date) ) 
 medpar$sbrt.date[ ! medpar$actually.lung.cancer ]  <- as.Date(NA_Date_)
 
-valid.dxs  <- c( expand_range('1622','1629'), expand_range(as.icd10('C34'), as.icd10('C349')))
-
-
-
 #fofo <- medpar %>% mutate( sbrt.date = ymd(sbrt.date), sublobar.date = ymd(sublobar.date),)
 #fofo  <-  medpar %>% filter (nna(sbrt.date) & PATIENT_ID %in% A2$PATIENT_ID) %>% mutate(actually.lung.cancer = find.rows( across(DGNS_1_CD:DGNS_25_CD), valid.dxs)) 
 #fofo$actually.lung.cancer
@@ -84,7 +76,7 @@ years  <-  as.character(2010:2019)
 carriers  <-  list()
 for (yeari in 1:length(years)) {
     year  <-  years[yeari]
-    fn  <-  sprintf("Z:/data/SEER Medicare Yang/Data files/Alex's Files/RDS Files/nch%s.line.RDS", year)
+    fn  <-  sprintf("%s/nch%s.line.RDS", rds.path,year)
     if (!file.exists( fn )) {
         dta.fn  <-  sprintf('../SEER-Medicare-data/data/SEER_Medicare/nch%s.line.dta', year )
         print(sprintf('Reading in %s', dta.fn))
@@ -352,18 +344,17 @@ label_list  <-  list(
 
 
 A   <-  A.gt2010 %>% select(PATIENT_ID, names(label_list) , dx.date, death.date, seer.surgery ) %>% distinct(PATIENT_ID, .keep_all =T) #this no longer changes anything. However, I kept it because everything downstream references 'A'
-A2 <- A
 
-#Take a patient who has multiple observations for example
-A.gt2010 %>% filter(PATIENT_ID=='lnK2020w0045894') %>% group_by(SEQUENCE_NUMBER, PRIMARY_SITE) %>% tally() %>% spread(PRIMARY_SITE, n) #patient has three primary cancers
-A.gt2010 %>% filter(PATIENT_ID=='lnK2020w0196859') %>% group_by(SEQUENCE_NUMBER, PRIMARY_SITE) %>% tally() %>% spread(PRIMARY_SITE, n) #patient has two primary cancers
+##Take a patient who has multiple observations for example
+#A.gt2010 %>% filter(PATIENT_ID=='lnK2020w0045894') %>% group_by(SEQUENCE_NUMBER, PRIMARY_SITE) %>% tally() %>% spread(PRIMARY_SITE, n) #patient has three primary cancers
+#A.gt2010 %>% filter(PATIENT_ID=='lnK2020w0196859') %>% group_by(SEQUENCE_NUMBER, PRIMARY_SITE) %>% tally() %>% spread(PRIMARY_SITE, n) #patient has two primary cancers
 
-A.gt2010_lc <- A.gt2010 %>% filter(PRIMARY_SITE %in% valid.dxs) #goes from 495376 diagnoses to 440247 by removing all non-lung cancer diagnoses
-A.gt2010_lc_ordered <-A.gt2010_lc[order(A.gt2010_lc$SEQUENCE_NUMBER, decreasing=FALSE),] #sort by sequence number 
-A.gt2010_lc_firstonly <- A.gt2010_lc_ordered %>% distinct(PATIENT_ID, .keep_all = T) #goes from 440247 to 426195 by removing additional lung cancers diagnosed after the first lung cancer
-A.gt2010_lc_firstonly %>% group_by(SEQUENCE_NUMBER) %>% tally()
+#A.gt2010_lc <- A.gt2010 %>% filter(PRIMARY_SITE %in% valid.dxs) #goes from 495376 diagnoses to 440247 by removing all non-lung cancer diagnoses
+#A.gt2010_lc_ordered <-A.gt2010_lc[order(A.gt2010_lc$SEQUENCE_NUMBER, decreasing=FALSE),] #sort by sequence number 
+#A.gt2010_lc_firstonly <- A.gt2010_lc_ordered %>% distinct(PATIENT_ID, .keep_all = T) #goes from 440247 to 426195 by removing additional lung cancers diagnosed after the first lung cancer
+#A.gt2010_lc_firstonly %>% group_by(SEQUENCE_NUMBER) %>% tally()
 
-A.gt2010 %>% count(YEAR_OF_LAST_FOLLOW_UP_RECODE)
+#A.gt2010 %>% count(YEAR_OF_LAST_FOLLOW_UP_RECODE)
 
 
 ################################
@@ -382,7 +373,7 @@ class(carrier.tx$sbrt.date)
 # Running these summarize statements on all hundreds of thousands of SEER patients does not make sense, but we 
 # do need the dates from medpar. Will restrict to medpar.carrier.tx patients then join back to SEER
 medpar.carrier.tx  <- bind_rows ( medpar.tx, carrier.tx) %>% 
-    left_join(A2)  %>%
+    left_join(A)  %>%
     group_by( PATIENT_ID ) %>% 
     summarise ( 
                dx.date = first(dx.date), 
@@ -407,16 +398,10 @@ medpar.carrier.tx.2 <- medpar.carrier.tx %>% filter( tx.after.dx & nna(tx.date) 
 medpar.carrier.tx.2 %>% group_by(tx) %>% tally()
 
 ################################
-#  Check the MBSF File For Deaths
+#  Process the MBSF file for death and censoring
 ################################
-#mbsfi<-read_dta("Z:/data/SEER Medicare Yang/Data files/MBSF files/mbsf.abcd.summary.2019.dta")
-#mbsfi$death.date<-ifelse(mbsfi$BENE_DEATH_DT!= "", mbsfi$BENE_DEATH_DT, NA_Date_) %>% ymd()
-#mbsfi %>% filter(nna(death.date)) %>% select(death.date) %>% head()
-#mbsfi$death.y.or.n<-ifelse(nna(mbsfi$death.date), 1, NA_character_ ) #61,231 patients with a "death date" in the 2019 MBSF File
-#mbsfi %>% count(death.y.or.n, VALID_DEATH_DT_SW) #All but 28 of these patients have had their death verified by the Social Security Administration or the Railroad Retirement Board 
-#mbsfi %>% filter(death.y.or.n==1) %>% select(BENE_DEATH_DT) %>% head()
 
-fn.RDS  <- sprintf("Z:/data/SEER Medicare Yang/Data files/Alex's Files/RDS Files/MBSF.RDS")
+fn.RDS  <- sprintf("%s/MBSF.RDS", rds.path)
 if ( ! file.exists (fn.RDS) ) {
   mbsfs  <-  list()
   years  <-  as.character(2010:2019)
@@ -437,69 +422,50 @@ if ( ! file.exists (fn.RDS) ) {
 
 #Create a date of death in the mbsf file 
 mbsf$death.date.mbsf<-ifelse(mbsf$BENE_DEATH_DT!= "", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd()
-mbsf %>% filter(nna(death.date.mbsf)) %>% select(death.date.mbsf) %>% head()
 mbsf.deaths.only <- mbsf %>% filter(nna(death.date.mbsf))
-mbsf.deaths.only %>% count()
 
-A_try2<- mbsf.deaths.only %>% right_join(A2)
-A_try2 %>% count
-A2 %>% count()
-A_try2 %>% filter(nna(death.date.mbsf)) %>% select(death.date.mbsf, death.date) %>% head() #MBSF has the day and the month
-
-#Compare the number of deaths between the MBSF and SEER 
-A_try3<-A_try2 %>% mutate(death.y.n.mbsf=case_when(
-  nna(death.date.mbsf) ~ 1,
-  T~NA_integer_),
-  death.y.n.seer=case_when(
-    nna(death.date) ~ 1,
-    T~NA_integer_)
-  )
-
-A_try3 %>% filter(!is.na(death.y.n.seer) | !is.na(death.y.n.mbsf)) %>% count(death.y.n.mbsf, death.y.n.seer, VALID_DEATH_DT_SW) 
-A_try3 %>% filter(!is.na(death.y.n.seer), is.na(death.y.n.mbsf)) %>% select(death.date.mbsf, death.date) %>% head() #patients with a death in SEER but NOT the MBSF 
-A_try3 %>% filter(is.na(death.y.n.seer), !is.na(death.y.n.mbsf)) %>% select(death.date.mbsf, death.date) %>% head() #patients with a death in the MBSF but NOT SEER 
-A_try3$death.discordant <- ifelse((A_try3$death.y.n.mbsf == A_try3$death.y.n.seer)| (A_try3$death.y.n.mbsf==1 & grepl('2019', A_try3$death.date.mbsf) | (is.na(A_try3$death.y.n.mbsf) & is.na(A_try3$death.y.n.seer))) , 'Concordant', 'Disconcordant')
-A_try3 %>% count(death.discordant, death.y.n.mbsf, death.y.n.seer) 
-
-A_try3$end.of.follow.up<-fifelse(nna(A_try3$death.date.mbsf), A_try3$death.date.mbsf, as.Date("20191231", format="%Y%m%d")) #this variable is a work in progress and will eventually account for patients who are no longer enrolled in medicare
-A_try3 %>% select(end.of.follow.up, death.date.mbsf) %>% filter(is.na(death.date.mbsf)) %>% head() 
+A2<- mbsf.deaths.only %>% right_join(A)  %>% 
+    mutate( valid.death.indicator = case_when(
+                     is.na(death.date) & is.na( death.date.mbsf)  ~ 'valid', # not death in either
+                     nna(death.date) & nna( death.date.mbsf)  ~ 'valid', # dead in both
+                     nna(death.date) & is.na( death.date.mbsf) ~ 'invalid', # Dead in SEER but not in MBSF is invalid
+                     nna(death.date.mbsf) & is.na( death.date)  & year(death.date.mbsf) == 2019 ~ 'valid', # Dead in MBSF but not in SEER is valid if it occured in 2019
+                     nna(death.date.mbsf) & is.na( death.date)  & year(death.date.mbsf) < 2019 ~ 'invalid', # Dead in MBSF but not in SEER is invalid if it occured <2019
+                     ))
 
 
-updated.death.data <- A_try3 %>% select(death.discordant, death.y.n.mbsf, death.y.n.seer, death.date.mbsf, PATIENT_ID) #This is the data frame that will be merged with the overall SEER file 
-updated.death.data %>% count()
+###Looking at patients who unenrolled (work in progress)
+#mbsf.small <- mbsf %>% inner_join(A.final.all.4) %>% select(tx.date, dataset.year, death.date.mbsf, death.y.n.mbsf, PATIENT_ID, BENE_ENROLLMT_REF_YR, BENE_PTA_TRMNTN_CD, BENE_PTB_TRMNTN_CD, BENE_HI_CVRAGE_TOT_MONS, BENE_SMI_CVRAGE_TOT_MONS)
 
-##Looking at patients who unenrolled (work in progress)
-mbsf.small <- mbsf %>% inner_join(A.final.all.4) %>% select(tx.date, dataset.year, death.date.mbsf, death.y.n.mbsf, PATIENT_ID, BENE_ENROLLMT_REF_YR, BENE_PTA_TRMNTN_CD, BENE_PTB_TRMNTN_CD, BENE_HI_CVRAGE_TOT_MONS, BENE_SMI_CVRAGE_TOT_MONS)
+#mbsf.small %>% filter(BENE_PTA_TRMNTN_CD>=2 & BENE_PTA_TRMNTN_CD<=9) %>% select(PATIENT_ID, dataset.year)
+#mbsf.small %>% filter(PATIENT_ID=="lnK2020x0446203") %>% select(tx.date, death.date.mbsf, dataset.year, BENE_PTA_TRMNTN_CD, BENE_PTB_TRMNTN_CD, BENE_HI_CVRAGE_TOT_MONS, BENE_SMI_CVRAGE_TOT_MONS) #this patient never died but unenrolled in 2010; they had 11 months of coverage
+#mbsf.small %>% filter(PATIENT_ID=="lnK2020x7610704") %>% select(tx.date, death.date.mbsf,dataset.year, BENE_PTA_TRMNTN_CD, BENE_PTB_TRMNTN_CD, BENE_HI_CVRAGE_TOT_MONS, BENE_SMI_CVRAGE_TOT_MONS) 
+#mbsf.small %>% filter(PATIENT_ID=="lnK2020x7610704") %>% select(tx.date, death.date.mbsf,dataset.year, BENE_PTA_TRMNTN_CD, BENE_PTB_TRMNTN_CD, BENE_HI_CVRAGE_TOT_MONS, BENE_SMI_CVRAGE_TOT_MONS) 
 
-mbsf.small %>% filter(BENE_PTA_TRMNTN_CD>=2 & BENE_PTA_TRMNTN_CD<=9) %>% select(PATIENT_ID, dataset.year)
-mbsf.small %>% filter(PATIENT_ID=="lnK2020x0446203") %>% select(tx.date, death.date.mbsf, dataset.year, BENE_PTA_TRMNTN_CD, BENE_PTB_TRMNTN_CD, BENE_HI_CVRAGE_TOT_MONS, BENE_SMI_CVRAGE_TOT_MONS) #this patient never died but unenrolled in 2010; they had 11 months of coverage
-mbsf.small %>% filter(PATIENT_ID=="lnK2020x7610704") %>% select(tx.date, death.date.mbsf,dataset.year, BENE_PTA_TRMNTN_CD, BENE_PTB_TRMNTN_CD, BENE_HI_CVRAGE_TOT_MONS, BENE_SMI_CVRAGE_TOT_MONS) 
-mbsf.small %>% filter(PATIENT_ID=="lnK2020x7610704") %>% select(tx.date, death.date.mbsf,dataset.year, BENE_PTA_TRMNTN_CD, BENE_PTB_TRMNTN_CD, BENE_HI_CVRAGE_TOT_MONS, BENE_SMI_CVRAGE_TOT_MONS) 
+#mbsf.small$enroll.2010<-ifelse(s$`2010`, )
 
-mbsf.small$enroll.2010<-ifelse(s$`2010`, )
+#mbsf.ids <- mbsf.small %>% select(PATIENT_ID, dataset.year)
+#s<-split(mbsf.ids, mbsf.ids$dataset.year) 
+#s$`2019`
 
-mbsf.ids <- mbsf.small %>% select(PATIENT_ID, dataset.year)
-s<-split(mbsf.ids, mbsf.ids$dataset.year) 
-s$`2019`
+#pid.list.2019<-c(s$`2019`$PATIENT_ID)
+#pid.list.2018<-c(s$`2018`$PATIENT_ID)
+#pid.list.2017<-c(s$`2017`$PATIENT_ID)
 
-pid.list.2019<-c(s$`2019`$PATIENT_ID)
-pid.list.2018<-c(s$`2018`$PATIENT_ID)
-pid.list.2017<-c(s$`2017`$PATIENT_ID)
+#mbsf.small$enroll.2019 <- ifelse(mbsf.small$PATIENT_ID %in% pid.list.2019, TRUE, FALSE)
+#mbsf.small$enroll.2018 <- ifelse(mbsf.small$PATIENT_ID %in% pid.list.2018, TRUE, FALSE)
+#mbsf.small$enroll.2017 <- ifelse(mbsf.small$PATIENT_ID %in% pid.list.2017, TRUE, FALSE)
 
-mbsf.small$enroll.2019 <- ifelse(mbsf.small$PATIENT_ID %in% pid.list.2019, TRUE, FALSE)
-mbsf.small$enroll.2018 <- ifelse(mbsf.small$PATIENT_ID %in% pid.list.2018, TRUE, FALSE)
-mbsf.small$enroll.2017 <- ifelse(mbsf.small$PATIENT_ID %in% pid.list.2017, TRUE, FALSE)
-
-mbsf.small %>% count(enroll.2017, enroll.2018, enroll.2019)
+#mbsf.small %>% count(enroll.2017, enroll.2018, enroll.2019)
 
 ################################
 #  Filter data, add in Thirty and Ninety Day Mortality Based on "tt" 
 ################################
 #TODO: Did Alex figure out the censoring?
-A3 <- A2 %>% right_join(medpar.carrier.tx.2, A_try3)  %>% mutate (
+A3 <- A2 %>% right_join(medpar.carrier.tx.2)  %>% mutate (
                                                           death = death.date.mbsf,
-                                                          #tt.old = as.numeric( if_else ( nna(death.date), death.date, ymd('20191231')  ) - tx.date, units = 'days'),
-                                                          tt = as.numeric(end.of.follow.up - tx.date, units = 'days')
+                                                          tt = as.numeric( if_else ( nna(death.date), death.date, ymd('20191231')  ) - tx.date, units = 'days'),
+                                                          #tt = as.numeric(end.of.follow.up - tx.date, units = 'days')
                                                           ) %>% 
                                 filter( tt >0 ) %>% mutate( 
                                                            thirty.day.mortality = ifelse ( nna(death.date) & tt < 30, T, F ) ,
@@ -519,7 +485,7 @@ A3 %>% count(tx, ninety.day.mortality)
 #outpati %>% count(pet.scan) #there are pet scans in outpatient revenue
 
 
-fn.RDS  <- sprintf("Z:/data/SEER Medicare Yang/Data files/Alex's Files/RDS Files/outpat.revenue.RDS")
+fn.RDS  <- sprintf("%s/outpat.revenue.RDS", rds.path )
 if ( ! file.exists (fn.RDS) ) {
   revenue.outpats  <-  list()
   years  <-  as.character(2010:2019)
@@ -564,7 +530,7 @@ A1_petscan %>% count(pet.scan, tx) #25214 observations
 
 A1_petscan$days.between.pet.and.treatment <- ifelse(A1_petscan$pet.scan == TRUE, A1_petscan$tx.date - A1_petscan$pet.scan.date, NA_character_) 
 
-ggplot(A1_petscan, aes(x=days.between.pet.and.treatment)) + geom_histogram() + theme_classic()  #positive if treatment happened AFTER the pet scan; NA if no pet scan
+# ggplot(A1_petscan, aes(x=days.between.pet.and.treatment)) + geom_histogram() + theme_classic()  #positive if treatment happened AFTER the pet scan; NA if no pet scan
   
 A1_petscan %>% count(pet.scan)
 
@@ -576,7 +542,7 @@ A2_petscan<-A1_petscan %>% mutate(pet.scan.on.time=case_when(
     T~NA_integer_
   ))
 
-ggplot(A2_petscan, aes(x= days.pet.treatment)) + geom_histogram() + theme_classic()  #positive if treatment happened AFTER the pet scan; NA if no pet scan
+# ggplot(A2_petscan, aes(x= days.pet.treatment)) + geom_histogram() + theme_classic()  #positive if treatment happened AFTER the pet scan; NA if no pet scan
 
 
 A2_petscan %>% count(pet.scan.on.time, tx)  #Received a pet scan during the year BEFORE treatment
@@ -629,10 +595,7 @@ saveRDS(A5, filename.out)
 # Process the  Outpatient files
 ################################
 
-#BASE 
-outpati  <-   read_dta("Z:/data/SEER Medicare Yang/Data files/Outpatient files/outpat2014.base.dta")
-
-fn.RDS  <- sprintf("Z:/data/SEER Medicare Yang/Data files/Alex's Files/RDS Files/outpat.base.RDS")
+fn.RDS  <- sprintf("%s/outpat.base.RDS", rds.path)
 if ( ! file.exists (fn.RDS) ) {
     outpats  <-  list()
     years  <-  as.character(2010:2019)
