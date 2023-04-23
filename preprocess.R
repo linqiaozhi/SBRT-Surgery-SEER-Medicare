@@ -726,9 +726,9 @@ negative.outcomes  <-  list(
     'acute_bronchitis' = list(
                               'icd9'=c('4660', '4661'),
                               'icd10' =  sprintf('J20%d',0:9)),
-    'cholelithiasis' = list(
-                            'icd9' = expand_range('5740', '57491'),
-                            'icd10' =  expand_range('K80', 'K8081')),
+#    'cholelithiasis' = list(
+#                            'icd9' = expand_range('5740', '57491'),
+#                            'icd10' =  expand_range('K80', 'K8081')),
     'oral' = list(
                             'icd9' = expand_range('520','5299'),
                             'icd10' =  expand_range('K00', 'K149')),
@@ -755,9 +755,33 @@ negative.outcomes  <-  list(
                             'icd10' =  expand_range('K640', 'K649') ),
     'optho' = list(
                             'icd9' = c( expand_range('360', '379') ) ,
-                            'icd10' =  expand_range('H00', 'H59') )
-)
-expand_range('360', '379')
+                            'icd10' =  expand_range('H00', 'H59') ),
+    'optho2' = list(
+                            'icd9' = c( 
+                                       expand_range('362', '36218'),  # Diabetic, hypertensive, and other retinopathy
+                                       expand_range('363', '36335') , # Uveitis
+                                       expand_range('364', '3643')  ,
+                                       expand_range('3623', '36237'),  # Retinal vascular occlusion                                     
+                                       expand_range('37034', '37034'),  # exposure keratitis                                      
+                                       expand_range('37741', '37741')  # ischemic optic neuropathy
+                                       ),
+                            'icd10' =  
+                               c( 
+                                 expand_range(as.icd10cm('E083'),as.icd10cm('E0839')), # Diabetic retinop
+                                 expand_range(as.icd10cm('E093'),as.icd10cm('E0939')),
+                                 expand_range(as.icd10cm('E103'),as.icd10cm('E1039')),
+                                 expand_range(as.icd10cm('E113'),as.icd10cm('E1139')),
+                                 expand_range(as.icd10cm('H35'),as.icd10cm('H3509')), # Other retinal disorders, including hypertensive retinopathy
+                                 expand_range(as.icd10cm('H20'),as.icd10cm('H209')), # Uveitis
+                                 expand_range(as.icd10cm('H30'),as.icd10cm('H309')), 
+                                 expand_range(as.icd10cm('H4411'),as.icd10cm('H44119')),
+                                 expand_range(as.icd10cm('H34'),as.icd10cm('H349')), # retinal vascular occlusiosn
+                                 expand_range(as.icd10cm('H4701'),as.icd10cm('H47019')) # exposure keratopathy
+                                 )
+    )
+    )
+
+
 
 sink('tbls/negative.outcomes.txt'); 
 for (namei in (names(negative.outcomes))) { 
@@ -774,28 +798,13 @@ sink()
 
 
 
-#A3  <-  A2
-#for (i in 1:length(negative.outcomes) ) {
-#    noc.name  <- names(negative.outcomes)[i]
-#    noc.codes  <- negative.outcomes[[noc.name]]
-#    print(noc.name)
-#    outpat.noc <- outpat.medpar %>% right_join(A2)  %>% 
-#         mutate( 
-#                noc.temp = find.rows.icdsmart( across(ICD_DGNS_CD1:ICD_DGNS_E_CD12), noc.codes, icd9or10),
-#                noc.temp =  if_else(noc.temp & (CLM_FROM_DT > tx.date)& (CLM_FROM_DT < death.date), CLM_FROM_DT, ymd(NA_character_)) ) %>% 
-#         group_by(PATIENT_ID) %>% 
-#         summarise( !!noc.name := first(na.omit(noc.temp))) %>% 
-#         filter(nna(!!rlang::sym(noc.name)))
-#     A3 <- A3 %>% left_join(outpat.noc)
-#}
 
 A6  <-  A5
 for (i in 1:length(negative.outcomes) ) {
     noc.name  <- names(negative.outcomes)[i]
     noc.codes  <- negative.outcomes[[noc.name]]
     print(noc.name)
-    #TODO: Why A4?
-    outpat.noc <- outpat.medpar %>% right_join(A4, by = 'PATIENT_ID')  %>% 
+    outpat.noc <- outpat.medpar %>% right_join(A5, by = 'PATIENT_ID')  %>% 
          mutate( 
                 noc.temp = find.rows.icdsmart( across(ICD_DGNS_CD1:ICD_DGNS_E_CD12), noc.codes, icd9or10),
                 noc.temp.pre =  if_else(noc.temp & (CLM_FROM_DT < tx.date)& (is.na(death.date.mbsf) | CLM_FROM_DT < death.date.mbsf), CLM_FROM_DT, ymd(NA_character_)), 
@@ -806,10 +815,18 @@ for (i in 1:length(negative.outcomes) ) {
          summarise( 
                       !!noc.name := first(na.omit(noc.temp.post)), 
                       !!sprintf('%s_pre', noc.name ) := first(na.omit(noc.temp.pre)),
-                      !!sprintf('%s_any', noc.name ) := first(na.omit(noc.temp.any))
+                      !!sprintf('%s_any', noc.name ) := first(na.omit(noc.temp.any)),
+                      !!sprintf('%s_any_count', noc.name ) := length((na.omit(noc.temp.any))),
+                      !!sprintf('%s_any_date_count', noc.name ) := length(unique(na.omit(noc.temp.any))),
+                      !!sprintf('%s_post_count', noc.name ) := length((na.omit(noc.temp.post))),
+                      !!sprintf('%s_post_date_count', noc.name ) := length(unique(na.omit(noc.temp.post)))
          )
      A6 <- A6 %>% left_join(outpat.noc, by ='PATIENT_ID')
 }
+
+
+
+
 
 
 
@@ -819,8 +836,9 @@ A.final  <- A6 %>% left_join(quan.deyo.final, by ='PATIENT_ID')
 A.final[,comorbidities] <- A.final[,comorbidities] %>% mutate_all( coalesce, F)
 #sum(is.na(A.final))
 
-table( (A.final$tx), useNA="ifany")
-table( nna(A.final$optho), useNA="ifany")/nrow(A.final)
+table( (A.final$Renal), useNA="ifany")
+table( nna(A.final$optho), useNA="ifany")
+table( (A.final$tx), nna(A.final$optho), useNA="ifany")
 
 max(A.final$death, na.rm = T)
 
@@ -836,4 +854,13 @@ getwd()
 write_rds( A.final,filename.out)
 write_rds( label_list,'data/label.list.RDS')
 
+A.final %>% group_by( tx) %>% summarise(sum( nna(optho2)) / n())
+A.final %>% group_by( tx) %>% summarise(mean( (optho2_any_count)) )
+A.final %>% group_by( tx) %>% summarise(mean( (optho2_any_date_count)) )
 A.final %>% group_by( tx) %>% summarise(sum( nna(optho)) / n())
+A.final %>% group_by( tx) %>% summarise(mean( (optho_any_count)) )
+A.final %>% group_by( tx) %>% summarise(mean( (optho_any_date_count)) )
+# A.final %>% group_by( tx) %>% summarise(mean( (optho_post_count)) )
+# A.final %>% group_by( tx) %>% summarise(sum( nna(gout)) / n())
+# A.final %>% group_by( tx) %>% summarise(mean( (gout_post_count)) )
+# A.final %>% group_by( tx) %>% summarise(mean( (oral_post_count)) )
