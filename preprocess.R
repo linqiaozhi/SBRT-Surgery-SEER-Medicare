@@ -29,8 +29,6 @@ source('file.paths.R')
 # V. Combine patient.tx,  patient.dx, patient.proc, patient.mbsf.death, patient.seer
 # VI. Massage variables
 # VII. Filter
-#TODOs tx after dx
-#medpar.carrier.tx.2 <- medpar.carrier.tx %>% filter( tx.after.dx & nna(tx.date)  & ! other.resection.before.tx ) 
 
 
 
@@ -613,12 +611,9 @@ write_rds( label_list,'data/label.list.RDS')
 # Testing 
 ################################
 
-A.final %>% filter (tx == 'sbrt') %>% sample_n(1) %>% glimpse
-
-A.final %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% glimpse
-outpat.outpat.revenue %>% filter (PATIENT_ID == 'lnK2020y2293566' & HCPCS_CD %in% sbrt.cpts) %>% glimpse
-outpat %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% mutate(ex = explain_code(as.icd9(PRNCPAL_DGNS_CD),condense=F)) %>% select (CLM_THRU_DT, ex) %>% print(n=Inf)
-carrier %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% mutate(ex = explain_code(as.icd9(LINE_ICD_DGNS_CD),condense=F)) %>% select (CLM_THRU_DT, ex) %>% print(n=Inf)
-
-## No resections in carrier files
-
+#A.final %>% filter (tx == 'sbrt') %>% sample_n(1) %>% glimpse
+#
+#A.final %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% glimpse
+#outpat.outpat.revenue %>% filter (PATIENT_ID == 'lnK2020y2293566' & HCPCS_CD %in% sbrt.cpts) %>% glimpse
+#outpat %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% mutate(ex = explain_code(as.icd9(PRNCPAL_DGNS_CD),condense=F)) %>% select (CLM_THRU_DT, ex) %>% print(n=Inf)
+#carrier %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% mutate(ex = explain_code(as.icd9(LINE_ICD_DGNS_CD),condense=F)) %>% select (CLM_THRU_DT, ex) %>% print(n=Inf)
