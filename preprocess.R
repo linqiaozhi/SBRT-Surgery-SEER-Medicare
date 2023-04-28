@@ -303,9 +303,10 @@ dx.quan  <-  dx.long.quan.long %>%
 dx.hardcodeds  <- patient.tx %>% select(PATIENT_ID)
 dxois  <- c(negative.outcomes, manual.comorbidities) 
 for (i in 1:length(dxois)) {
+    print(sprintf('%d/%d hard coded dx', i, length(dxois)))
     dxoi  <- dxois[[i]]
     dx.name  <-  names(dxois)[i]
-    dx.hardcoded  <- dx.long %>% filter( icd9or10 == 'icd9' )  %>% 
+    dx.hardcoded  <- dx.long %>% 
              mutate( 
                     temp = if_else ( icd9or10 == 'icd9', DX %in% dxoi$icd9,DX %in% dxoi$icd10 ),
                     temp.pre =  if_else(temp & (CLM_THRU_DT < tx.date), CLM_THRU_DT, ymd(NA_character_)), 
@@ -325,10 +326,16 @@ for (i in 1:length(dxois)) {
              dx.hardcodeds  <- dx.hardcodeds %>% left_join(dx.hardcoded, by='PATIENT_ID')
 }
 
+# Get first dx of all time
+first.dx  <- dx.long %>% arrange(PATIENT_ID, CLM_THRU_DT)
+first.dx <- first.dx %>% group_by(PATIENT_ID) %>% summarise( first.dx.date = first(CLM_THRU_DT))
+
 patient.dx   <-  dx.hardcodeds   %>%
     left_join(dx.quan, by ='PATIENT_ID') %>%   
     mutate(across(colnames(dx.quan), ~replace(., is.na(.), FALSE))) %>% 
-    mutate(across(contains('count'), ~replace(., is.na(.), 0)))
+    mutate(across(contains('count'), ~replace(., is.na(.), 0))) %>%
+    left_join(first.dx)
+
 
 
 ################################
@@ -538,15 +545,16 @@ A  <-  A %>% #Use lung.SEER.first.lc.dx
                        death.date.seer = 
                            ymd( ifelse ( ""!=(SEER_DATEOFDEATH_YEAR) & ""!=(SEER_DATEOFDEATH_MONTH) , sprintf('%s%s15', SEER_DATEOFDEATH_YEAR, SEER_DATEOFDEATH_MONTH), NA_character_ ) )  ,
                        tt = as.numeric( if_else ( nna(death.date.mbsf), death.date.mbsf, ymd('20191231')  ) - tx.date, units = 'days'),
+                       time.enrolled = as.numeric( if_else ( nna(death.date.mbsf), death.date.mbsf, ymd('20191231')  ) - first.dx.date, units = 'days'),
                        thirty.day.mortality = ifelse ( nna(death.date.mbsf) & tt < 30, T, F ) ,
                        ninety.day.mortality = ifelse ( nna(death.date.mbsf) & tt < 90, T, F ) ,
+                       death = death.date.mbsf,
                        valid.death.indicator = case_when(
                                  is.na(death.date.seer) & is.na( death.date.mbsf)  ~ 'valid', # not death in either
                                  nna(death.date.seer) & nna( death.date.mbsf)  ~ 'valid', # dead in both
                                  nna(death.date.seer) & is.na( death.date.mbsf) ~ 'invalid', # Dead in SEER but not in MBSF is invalid
                                  nna(death.date.mbsf) & is.na( death.date.seer)  & year(death.date.mbsf) == 2019 ~ 'valid', # Dead in MBSF but not in SEER is valid if it occured in 2019
                                  nna(death.date.mbsf) & is.na( death.date.seer)  & year(death.date.mbsf) < 2019 ~ 'invalid', # Dead in MBSF but not in SEER is invalid if it occured <2019
-
                                                          ))
 
 A  <- A %>% mutate(
@@ -569,7 +577,10 @@ label_list  <-  list(
                      histology.cat = 'Histology Categorical',
                      histology.simple = 'Histology Simple',
                      YEAR_OF_DIAGNOSIS = 'Year of Diagnosis',
-                     BEHAVIOR_CODE_ICD_O_3 = 'Behavior'
+                     BEHAVIOR_CODE_ICD_O_3 = 'Behavior',
+                     death      = 'Death',
+                     thirty.day.mortality = '30-day mortality',
+                     ninety.day.mortality = '90-day mortality'
 )
 #A   <-  A.gt2010 %>% select(PATIENT_ID, names(label_list) , dx.date, death.date, seer.surgery ) %>% distinct(PATIENT_ID, .keep_all =T) #this no longer changes anything. However, I kept it because everything downstream references 'A'
 
@@ -586,6 +597,7 @@ A.final <- A.final %>% filter(
                               age >=65,
                   histology.cat!="Small Cell Carcinoma" & histology.cat!="Other/Unknown" &
                   (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c") & 
+                  race != 'Unknown',
                   tnm.n==0 & tnm.m==0 
               )
 A.final %>% count(tx)
@@ -601,10 +613,11 @@ labels(A.final)  <-  label_list
 tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
 summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars2.htm')
 
-filename.out  <-  'data/A.final.RDS' 
-write_rds( A.final,filename.out)
+filename.out  <-  'data/A.final.all.gte.65.RDS' 
+A.final %>% select ( PATIENT_ID:death.date.mbsf, names(label_list), tt, time.enrolled) %>%  write_rds( filename.out)
 write_rds( label_list,'data/label.list.RDS')
 
+A.final %>% group_by(tx) %>% summarise( m = mean((tt)))
 
 
 ################################
