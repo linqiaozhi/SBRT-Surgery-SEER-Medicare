@@ -83,13 +83,12 @@ make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
         legend.position = 'bottom',
       #  legend.title = element_blank(),
         legend.key.size=grid::unit(2,"lines"),
-         axis.text.y = ggtext::element_markdown()) +
-     ggtitle('Treatment effect of SBRT')
+         axis.text.y = ggtext::element_markdown()) 
  g
 }
 
 make.HD.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
-    xlims <- c(-0.05,0.15)
+    xlims <- c(-0.05,0.25)
     tt  <-  'Hazard Difference'
     g <- ggplot(odds.ratios_, aes(x = estimate, y=y_axis)) + 
         geom_vline(aes(xintercept = 0), size = 0.25, linetype = "dashed") +
@@ -109,8 +108,7 @@ make.HD.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
         legend.position = 'bottom',
       #  legend.title = element_blank(),
         legend.key.size=grid::unit(2,"lines"),
-         axis.text.y = ggtext::element_markdown()) +
-     ggtitle('Treatment effect of SBRT')
+         axis.text.y = ggtext::element_markdown())
  g
 }
 
