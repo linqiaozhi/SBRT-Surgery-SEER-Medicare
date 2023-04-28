@@ -34,24 +34,6 @@ source('file.paths.R')
 
 
 
-
-
-
-################################
-# Plan: 
-# 1. Load the SEER file to obtain lung cancer patients. All of the following files will be filtered to only include the lung cancer patinets.
-# 2. Identify the treatment received by patients
-#       1. Load the Medpar file, and check for SBRT or Resection for inpatient
-#       2. Load the Carrier line file, and check for SBRT in those files, which correspond to outpatient procedures
-# 3. Define the SEER variables, which includes dx.date
-# 4. Combine SEER with Medpar and carrier so that can filter by tx > dx. 
-# Medpar: provides the surgery information. Included SBRT in case the patient
-# received this as an inpatient .
-#  Carrier lines: One line for each procedure. This is where we obtain the SBRT, which are all done as outpatient procedures. 
-# Carrier base, outpatient, and DME: for diagnoses
-# Carrier lines, outpatient for PET scans 
-################################
-
 ################################
 #  SECTION I: Load SEER file
 ################################
