@@ -5,7 +5,7 @@ library(timereg)
 calc.err  <-  function (cox.out, beta_A, var.name = 'const(A)')  100*(coef(cox.out)[var.name,'Coef.'] - beta_A)  / beta_A
 logistic  <-  function(x) 1/(1+exp( -x))
 
-sim  <-  function( N = 1E5, eps = 1,rateC = 0.01, lambda = 0.015, beta_A = 0.001, beta_U = 0.001,  verbose = F , plotit=F)  { 
+sim  <-  function( N = 1E5, eps_W = 1, eps_Z=1, rateC = 0.01, lambda = 0.015, beta_A = 0.001, beta_U = 0.001,  verbose = F , plotit=F)  { 
  # N = 1E5
 # eps = 1
 # lambda = 0.015 
@@ -16,8 +16,9 @@ sim  <-  function( N = 1E5, eps = 1,rateC = 0.01, lambda = 0.015, beta_A = 0.001
 # plotit=T
     # Generate data
     U  <-   rnorm( N)+3           # Unmeasured confounder
-    W  <-  U + eps*rnorm (N)    # proxy 1
-    Z  <-  U + eps*rnorm (N)    # proxy 2
+    W  <-  U + eps_W*rnorm (N)    # proxy 1
+    #Z  <-  U + eps_Z*rnorm (N)    # proxy 2
+    Z  <-   eps_Z*rnorm (N)    # proxy 2
     X  <-   runif(N)           # Measured confounder
     A  <-   rbinom( N, size =1, prob = logistic (-3 + U + X )) # treatment
     if (verbose) print(table( A, useNA="ifany"))
@@ -70,15 +71,15 @@ print.results  <-  function ( outs) {
 ################################
 
 
-pdf ('curves.pdf')
-sim(N= 1E4, eps = 1,  rateC = -1, lambda = 0.015, beta_A = 0.001, beta_U = 0.001,verbose=T, plotit=T)
-dev.off()
+# pdf ('curves.pdf')
+# # sim(N= 1E4, eps = 1,  rateC = -1, lambda = 0.015, beta_A = 0.001, beta_U = 0.001,verbose=T, plotit=T)
+# dev.off()
 
 Nits  <- 1000
 set.seed(5)
 outs  <-  data.frame () 
 for (i in 1:Nits) {
-    outs  <-  rbind ( outs, as.data.frame(sim(N= 1E4, eps = 1,  rateC = 0.00001,  verbose=F))) 
+    outs  <-  rbind ( outs, as.data.frame(sim(N= 1E4, eps_W = 1, eps_Z=1,  rateC = 0.00001,  verbose=F))) 
 }
 print('Medium noise regime (eps=1), no censoring')
 print.results(outs)
