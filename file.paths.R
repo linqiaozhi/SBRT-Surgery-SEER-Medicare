@@ -1,5 +1,5 @@
 #GCL example
-data.path  <- '../SEER-Medicare-data/data/SEER_Medicare'
+data.path  <- '/PHShome/gcl20/Research_Local/SEER-Medicare-data/data/SEER_Medicare'
 dta.path  <- data.path
 rds.path  <- data.path
 
