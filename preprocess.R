@@ -300,6 +300,8 @@ for (i in 1:length(dxois)) {
                           !!dx.name := first(na.omit(temp.post)), 
                           !!sprintf('%s_pre', dx.name ) := first(na.omit(temp.pre)),
                           !!sprintf('%s_any', dx.name ) := first(na.omit(temp.any)),
+                          !!sprintf('%s_pre_count', dx.name ) := length((na.omit(temp.pre))),
+                          !!sprintf('%s_pre_date_count', dx.name ) := length(unique(na.omit(temp.pre))),
                           !!sprintf('%s_any_count', dx.name ) := length((na.omit(temp.any))),
                           !!sprintf('%s_any_date_count', dx.name ) := length(unique(na.omit(temp.any))),
                           !!sprintf('%s_post_count', dx.name ) := length((na.omit(temp.post))),
@@ -585,12 +587,13 @@ A.final <- A.final %>% filter(
 A.final %>% count(tx)
 A.final  <- A.final %>% filter ((valid.pet.scan & tx=='sbrt') | tx=='sublobar' ) 
 A.final %>% count(tx)
+A.final %>% count(year(tx.date), tx)
 
 A.final %>% filter (tx =='sbrt') %>% count(year(tx.date))
 
 comorbidities  <-  c('DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal', 'Stroke',  'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis', 'HIV', 'Smoking', 'Oxygen')
 tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
-f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list),comorbidities), collapse = "+") )
+f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list),comorbidities, sprintf('%s_any_count', names(negative.outcomes)), sprintf('%s_pre_count', names(negative.outcomes))), collapse = "+") )
 labels(A.final)  <-  label_list
 tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
 summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars2.htm')
@@ -601,6 +604,8 @@ write_rds( label_list,'data/label.list.RDS')
 
 A.final %>% group_by(tx) %>% summarise( m = mean((tt)))
 
+A.final %>% group_by(year(tx.date)) %>% summarise ( mean( tx == 'sbrt')) 
+count(year(tx.date), tx)
 
 ################################
 # Testing 
