@@ -18,16 +18,16 @@ cox_nc_est <- function(data, A, X, Z, W, Y, event) {
     sum(colMeans(U_q(tau)) ^ 2)
   }
   tau_init <- coef(glm(A ~ Z + X, family = binomial))
-  nlm_out <- nlm(f = G, p = tau_init, iterlim = 500)
-  G(rnorm(19))
+  nlm_out <- nlm(f = G, p = tau_init, iterlim = 500, print.level = 0)
   tau_est <- nlm_out$estimate
   # print(sprintf('Number of iterations: %d, cost %f', nlm_out$iter, nlm_out$minimum))
-  # print(rbind(tau_init, tau_est))
+   # print(rbind(tau_init, tau_est))
+   # print(c(G(tau_init), G(tau_est)))
   q_est <- qfunc(tau_est)
   nc_weights <- q_est ^ (1 - A)
   nc_ph <- coxph(Surv(Y, event) ~ A, weights = nc_weights)
-   # glm( A  ~ W[,1] , family = poisson) %>% summary
-   # glm( A ~ W[,1], family = poisson, weights = nc_weights) %>% summary
+     # glm( A  ~ W , family = poisson) %>% summary %>% print
+     # glm( A ~ W, family = poisson, weights = nc_weights) %>% summary %>% print
   return(coef(nc_ph)[1])
 }
 
@@ -43,6 +43,7 @@ cox_nc <- function(data, A, X, Z, W, Y, event, B = 1000, ncores = 1) {
     }
   }, mc.cores = ncores)
   se <- sd(unlist(est_boot), na.rm = T)
+  # est.boot = mean(unlist(est_boot), na.rm = T)
   return(list(estimate = est, se = se))
 }
 make_data <- function(N = 5000) {
