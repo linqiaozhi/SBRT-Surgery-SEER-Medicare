@@ -121,7 +121,7 @@ for (outcome.i in 1:length(outcome.names.temp)){
     hazard.differences.outcomes[outcome.i,1:3]  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
 } 
 hazard.differences.outcomes
-g1.a  <-  make.HD.plot(hazard.differences.outcomes, label_list2) + ggtitle('Outcomes')
+g1.a  <-  make.HD.plot(hazard.differences.outcomes, label_list2)
 
 
 
@@ -141,7 +141,7 @@ for (outcome.i in 1:length(outcome.names.temp)){
     hazard.differences.outcomes.adj[outcome.i,1:3]  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
 } 
 hazard.differences.outcomes.adj
-g1.b  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2) + ggtitle('Outcomes')
+g1.b  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2)
 g  <- g1.a / g1.b 
 ggsave(g, width=7, height=5, filename = sprintf('figs/aalen.adjX.%s.pdf', subset.name))
 
@@ -163,7 +163,7 @@ for (outcome.i in 1:length(outcome.names.temp)){
     hazard.differences.outcomes.adj[outcome.i,1:3]  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
 } 
 hazard.differences.outcomes.adj
-g1.b  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2, xlim=c(-0.1, 0.7)) + ggtitle('Outcomes')
+g1.b  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2, xlim=c(-0.1, 0.7)) 
 ggsave(g1.b, width=7, height=2.5, filename = sprintf('figs/aalen.adjX.time.varying.%s.pdf', subset.name))
 
 
@@ -333,3 +333,5 @@ for (outcome.i in 4:length(outcome.names.temp)){
 # saveRDS(hazard.ratios.outcomes.two.step, sprintf('data/hazard.ratios.outcomes.two.step.%s.rds', subset.name))
 g3.a  <-  make.OR.plot(hazard.ratios.outcomes.two.step[-nrow(hazard.differences.outcomes.two.step),], label_list2) + ggtitle('Adjusting for treatment year and using proximal approach ')
 ggsave(g3.a, width=7, height=2.5, filename = sprintf('figs/cox.proximal.%s.pdf', subset.name))
+
+
