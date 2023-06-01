@@ -1,3 +1,13 @@
+library(icd)
+# apply expand_range to each
+expand.each.code  <-  function(code.list) {
+    out.list  <-  c()
+    for (i in 1:length(code.list)) {
+        code  <- code.list[i]
+        out.list  <-  c(out.list, expand_range(code, code))
+    }
+    return(out.list)
+}
 valid.dxs  <- c( expand_range('1622','1629'), expand_range(as.icd10('C34'), as.icd10('C349')))
 sbrt.icds  <-  c('9230', '9231', '9232', '9233', '9239',
                     'DB22DZ', 'DB22HZZ', 'DB22JZZ')
@@ -8,6 +18,7 @@ other.resection.icds  <-  c( '3240', '3241', '3249', '3260', '3250', '3259', '0B
 
 
 sbrt.cpts  <-  c('77373', 'G0173', 'G0251', 'G0339', 'G0340', '61793',  '0082T' )
+
 
 manual.comorbidities   <- list (
   'smoking'       = list (
@@ -29,9 +40,7 @@ manual.comorbidities   <- list (
     'icd9' = expand_range(
       '330', '338'
     ),
-    'icd10' = c(
-      'G11', 'G12', 'G20', 'G23', 'G30', 'G31', 'G32', 'G89', 'G90', 'G95'
-    )
+    'icd10' = expand.each.code(c( 'G11', 'G12', 'G20', 'G23', 'G30', 'G31', 'G32', 'G89', 'G90', 'G95'))
   ),
   'other psychoses' = list(
     'icd9' = expand_range(
@@ -88,7 +97,6 @@ manual.comorbidities   <- list (
     'icd10' = c(
       'F04', 'F07', 'F09', 'F1020', 'F1021', 'F111', 'F112', 'F121', 'F122', 'F131', 'F132', 'F141', 'F142', 'F151', 'F152', 'F161', 'F162', 'F181', 'F182', 'F191', 'F192', 'F32', expand_range('F40', 'F48'), 'F50', 'F51', 'F54', expand_range('F60', 'F69'), 'F80', 'F81', 'F91', 'F93', 'F95', 'F98', 'F99'
     )
-
   ),
   'arthropathies and related disorders' = list(
     'icd9' = expand_range(
@@ -170,8 +178,9 @@ manual.comorbidities   <- list (
       'N00', 'N03', 'N04', 'N05', 'N07', 'N17', 'N18', 'N19', 'N25', 'N269', 'N27'
     ) 
   )
-  
 )
+
+example.codes  <-  c( 'N00', 'N03', 'N04', 'N05', 'N07', 'N17', 'N18', 'N19', 'N25', 'N269', 'N27')
 
 
 
