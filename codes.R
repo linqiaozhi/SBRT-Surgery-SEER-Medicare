@@ -40,7 +40,7 @@ manual.comorbidities   <- list (
     'icd9' = expand_range(
       '330', '338'
     ),
-    'icd10' = expand.each.code(c( 'G11', 'G12', 'G20', 'G23', 'G30', 'G31', 'G32', 'G89', 'G90', 'G95'))
+    'icd10' = expand.each.code(c( 'G11', 'G12', 'G20', 'G23', 'G30', 'G31', 'G32', 'G89', 'G90', 'G95'))a
   ),
   'other psychoses' = list(
     'icd9' = expand_range(
