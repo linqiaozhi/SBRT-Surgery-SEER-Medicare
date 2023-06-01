@@ -8,16 +8,172 @@ other.resection.icds  <-  c( '3240', '3241', '3249', '3260', '3250', '3259', '0B
 
 
 sbrt.cpts  <-  c('77373', 'G0173', 'G0251', 'G0339', 'G0340', '61793',  '0082T' )
+
 manual.comorbidities   <- list (
-                                'smoking'       = list (
-                                                        'icd9' = c( 'V1582', '3051'),
-                                                        'icd10' = c('Z87891')
-                                                        ),
-                                'o2'       = list (
-                                                        'icd9' = c('V462'),
-                                                        'icd10' = c('Z9981')
-                                                    )
-                                )
+  'smoking'       = list (
+    'icd9' = c( 'V1582', '3051'),
+    'icd10' = c('Z87891')
+  ),
+  'o2'       = list (
+    'icd9' = c('V462'),
+    'icd10' = c('Z9981')
+  ),
+  'organic psychotic conditions' = list(
+    'icd9' = expand_range(
+      '290', '295'
+    ),
+    'icd10' = c(
+      'F01', 'F02', 'F03', 'F05', 'F06', expand_range('F1015', 'F1019'), expand_range('F1023', 'F1029'), expand_range('F1192', 'F1198'), expand_range('F1292', 'F1298'),  expand_range('F1392', 'F1398'),  expand_range('F1492', 'F1498'), expand_range('F1592', 'F1598'),  expand_range('F1692', 'F1698'), 'F17',  expand_range('F1892', 'F1898'),  expand_range('F1992', 'F1998')
+    ) ), 
+  'hereditary and degenerative diseases of the central nervous system' = list(
+    'icd9' = expand_range(
+      '330', '338'
+    ),
+    'icd10' = c(
+      'G11', 'G12', 'G20', 'G23', 'G30', 'G31', 'G32', 'G89', 'G90', 'G95'
+    )
+  ),
+  'other psychoses' = list(
+    'icd9' = expand_range(
+      '295', '299'
+    ),
+    'icd10' = c(
+      'F20', 'F22', 'F28',  expand_range('F30', 'F39'), 'F84'
+    ) 
+  ),
+  'other forms of heart disease' = list(
+    'icd9' = expand_range(
+      '410', '429'
+    ),
+    'icd10' = c(
+      'I30', 'I31', 'I33', 'I34', 'I40', 'I42', 'I45', 'I49', 'I50', 'I51'
+    ) 
+  ),
+  'open wound of lower limb' = list(
+    'icd9' = expand_range(
+      '890', '897'
+    ),
+    'icd10' = c(
+      'S71', 'S81', 'S88', expand_range('S910', 'S913'), 'S98'
+    ) 
+  ),
+  'ischemic heart disease' = list(
+    'icd9' = expand_range(
+      '410', '414'
+    ),
+    'icd10' = c(
+      'I20', 'I21', 'I24', 'I252', 'I258'
+    ) 
+  ),
+  'hypertensive disease' = list(
+    'icd9' = expand_range(
+      '401', '405'
+    ),
+    'icd10' = expand_range(
+      'I10', 'I15'
+    ) 
+  ),
+  'cerebrovascular disease' = list(
+    'icd9' = expand_range(
+      '430', '438'
+    ),
+    'icd10' = c(
+      'I60', 'I61', 'I62', 'I65', 'I66', 'I67', 'I69', 'G45'
+    ) 
+  ),
+  'neurotic disorders, personality disorders, and other nonpsychotic mental disorders' = list(
+    'icd9' = expand_range(
+      '300', '316'
+    ),
+    'icd10' = c(
+      'F04', 'F07', 'F09', 'F1020', 'F1021', 'F111', 'F112', 'F121', 'F122', 'F131', 'F132', 'F141', 'F142', 'F151', 'F152', 'F161', 'F162', 'F181', 'F182', 'F191', 'F192', 'F32', expand_range('F40', 'F48'), 'F50', 'F51', 'F54', expand_range('F60', 'F69'), 'F80', 'F81', 'F91', 'F93', 'F95', 'F98', 'F99'
+    )
+
+  ),
+  'arthropathies and related disorders' = list(
+    'icd9' = expand_range(
+      '710', '719'
+    ),
+    'icd10' = c(
+      'M01', 'M06', expand_range('M1180', 'M1189'), 'M12', 'M148', 'M15', expand_range('M23', 'M25'), 'M35'
+    ) 
+  ),
+  'chronic obstructive pulmonary disease and allied conditions' = list(
+    'icd9' = expand_range(
+      '490', '496'
+    ),
+    'icd10' = c(
+      expand_range('J40', 'J45'), 'J47', 'J67'
+    ) 
+  ),
+  'other bacterial diseases' = list(
+    'icd9' = expand_range(
+      '030', '041'
+    ),
+    'icd10' = c(
+      'A30', 'A31', expand_range('A35', 'A42'), 'A46', 'A48', 'A49'
+    ) 
+  ),
+  'diseases of veins and lymphatics, and other diseases of circulatory system' = list(
+    'icd9' = expand_range(
+      '451', '459'
+    ),
+    'icd10' = c(
+      'I80', expand_range('I81', 'I83'), 'I86', 'I89', 'I95', 'I99', 'K64'
+    ) 
+  ),
+  'pneumonia and influenza' = list(
+    'icd9' = expand_range(
+      '480', '487'
+    ),
+    'icd10' = c(
+      expand_range('J09', 'J13'), expand_range('J15', 'J18')
+    ) 
+  ),
+  'diseases of other endocrine glands' = list(
+    'icd9' = expand_range(
+      '250', '259'
+    ),
+    'icd10' = c(
+      'E08', 'E09', 'E10', 'E11', 'E12', 'E13', 'E16', 'E21', 'E22', 'E23', 'E27', 'E28', 'E29', 'E31', 'E32', 'E34'
+    )
+  ),
+  'other diseases of urinary system' = list(
+    'icd9' = expand_range(
+      '590', '599'
+    ),
+    'icd10' = c(
+      expand_range('N10', 'N16'), 'N133', 'N20', 'N21', expand_range('N25', 'N29'), 'N30', 'N32', 'N34', 'N35', 'N39'
+    ) 
+  ),
+  'ill-defined and unknown causes of morbidity and mortality' = list(
+    'icd9' = expand_range(
+      '797', '799'
+    ),
+    'icd10' = c(
+      'R4181', 'R99'
+    ) 
+  ),
+  'contusion with intact skin surface' = list(
+    'icd9' = expand_range(
+      '920', '924'
+    ),
+    'icd10' = expand_range(
+      'S00', 'S99' 
+    ) 
+  ),
+  'nephritis, nephrotic syndrome, and nephrosis' = list(
+    'icd9' = expand_range(
+      '580', '589'
+    ),
+    'icd10' = c(
+      'N00', 'N03', 'N04', 'N05', 'N07', 'N17', 'N18', 'N19', 'N25', 'N269', 'N27'
+    ) 
+  )
+  
+)
+
+
 
 pet.scan.cpts <-c('78811', '78812', '78813', '78814', '78815', '78816', 'G0235')
 
@@ -89,14 +245,14 @@ negative.outcomes  <-  list(
 
 
 if (F) { 
-sink('tbls/negative.outcomes.txt'); 
-for (namei in (names(negative.outcomes))) { 
+sink('tbls/manual.comorbidites.txt'); 
+for (namei in (names(manual.comorbidities))) { 
     cat(sprintf('Variable Name: %s', namei))
     print('ICD9')
-    icd9.codes  <-  negative.outcomes[[namei]][['icd9']]
+    icd9.codes  <-  manual.comorbidities[[namei]][['icd9']]
     cat(sprintf('%s\n', paste(icd9.codes, explain_code(condense=F, as.icd9(icd9.codes)))))
     print('ICD10')
-    icd10.codes  <-  negative.outcomes[[namei]][['icd10']]
+    icd10.codes  <-  manual.comorbidities[[namei]][['icd10']]
     cat(sprintf('%s\n', paste(icd10.codes, explain_code(condense=F, as.icd10(icd10.codes)))))
     cat('------------------------------\n\n\n\n')
 } 
