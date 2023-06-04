@@ -1,3 +1,20 @@
+library(tidyverse)
+CPT_Codes  <-  read_csv('CPT_Codes_2020.csv') %>% rename(HCPC=`HCPC/MOD`, short_desc = `SHORT DESCRIPTION`, long_desc=`LONG DESCRIPTION`)
+
+expand_range_procs   <-  function( from, to, CPT_Codes) {
+    # get first character
+    if (substr(from, 1, 1) == substr(to, 1, 1)) {
+        nums_between = as.numeric(gsub('[^0-9]', '', from)):as.numeric(gsub('[^0-9]', '', to))
+        # add first character back
+        nums_between = sprintf('%s%04d', substr(from, 1, 1), nums_between)
+        codes  <- CPT_Codes %>% filter ( HCPC %in% nums_between) %>% pull(HCPC)
+    }else {
+        error('First character of from and to must be the same')
+    }
+    return (codes)
+}
+
+
 valid.dxs  <- c( expand_range('1622','1629'), expand_range(as.icd10('C34'), as.icd10('C349')))
 sbrt.icds  <-  c('9230', '9231', '9232', '9233', '9239',
                     'DB22DZ', 'DB22HZZ', 'DB22JZZ')
@@ -19,8 +36,31 @@ manual.comorbidities   <- list (
                                                     )
                                 )
 
-pet.scan.cpts <-c('78811', '78812', '78813', '78814', '78815', '78816', 'G0235')
 
+
+pet.scan.cpts <-c('78811', '78812', '78813', '78814', '78815', '78816', 'G0235')
+ ambulance.cpts <-c()
+
+
+procs  <- list (
+            'hospital_beds_and_supplies' = expand_range_procs ( 'E0250', 'E0373', CPT_Codes),
+            'wheelchairs_accessories' = c ( expand_range_procs ( 'K0001', 'K0462', CPT_Codes), 'K0669'),
+            'walking_aids' = c ( expand_range_procs ( 'E0100', 'E0159', CPT_Codes)),
+            'O2accessories' = c ( expand_range_procs ( 'E1353', 'E1406', CPT_Codes)),
+            'other_supplies' =  expand_range_procs ( 'A4244', 'A4290', CPT_Codes),
+            'diabetic_footwear' =  expand_range_procs ( 'A5500', 'A5513', CPT_Codes),
+            'transportation_services' =  expand_range_procs ( 'A0021', 'A0999', CPT_Codes)
+                )
+
+if (F) { 
+sink('tbls/proc.codes.txt'); 
+for (namei in names(procs)) { 
+    cat(sprintf('Variable Name: %s', namei))
+    CPT_Codes %>% filter (HCPC %in% procs[[namei]] ) %>% select(HCPC, long_desc) %>% print(n=Inf)
+    cat('------------------------------\n\n\n\n')
+} 
+sink()
+}
 
 negative.outcomes  <-  list(
     'fall' = list( 

@@ -323,9 +323,31 @@ patient.dx   <-  dx.hardcodeds   %>%
 
 
 ################################
-# SECTION IV PET scan 
+# SECTION IV Procedure codes (not for treatment)
 ################################
+# Load DME
+fn.RDS  <- sprintf("%s/dme.line.RDS", rds.path)
+if ( ! file.exists (fn.RDS) ) {
+    dme.lines  <-  list()
+    years  <-  as.character(2010:2019)
+    for (yeari in 1:length(years)) {
+        year  <-  years[yeari]
+        print(year)
+        dme.linei  <-   read_dta(sprintf('%s/dme%s.line.dta', data.path, year) , 
+                               col_select=c('PATIENT_ID', 'CLM_ID',  'CLM_THRU_DT', 'HCPCS_CD' ))
+        dme.lines[[year]]  <-  dme.linei %>% inner_join(lung.SEER.pids)
+    }
+    dme.line  <-  bind_rows(dme.lines,  .id='dataset.year')
+    dme.line  <-  dme.line %>% mutate(  CLM_THRU_DT = ymd(CLM_THRU_DT))
+    saveRDS(object = dme.line, file = fn.RDS) 
+}else{
+    dme.line  <-  readRDS(fn.RDS)
+}
+dme.line %>% count (dataset.year)
 
+
+
+# Combine DME with the other sources of HCPCS codes
 carrier.proc   <- carrier %>% 
     select( PATIENT_ID, HCPCS_CD, CLM_THRU_DT) %>% 
     filter ( PATIENT_ID %in% patient.tx$PATIENT_ID) %>%
@@ -333,23 +355,54 @@ carrier.proc   <- carrier %>%
 outpat.revenue.proc   <- outpat.revenue %>% 
     select( PATIENT_ID, HCPCS_CD, CLM_THRU_DT) %>% 
     filter ( PATIENT_ID %in% patient.tx$PATIENT_ID)
-patient.outpatient.procs  <- rbind(carrier.proc, outpat.revenue.proc) %>% 
+dme.line.proc  <-  dme.line %>% select( PATIENT_ID, HCPCS_CD, CLM_THRU_DT)
+procs.long  <- rbind(carrier.proc, outpat.revenue.proc, dme.line.proc) %>% 
     left_join(patient.tx %>% 
     select(PATIENT_ID, tx.date))
 
-patient.outpatient.procs <- patient.outpatient.procs   %>%mutate(
-                            pet.scan    = HCPCS_CD %in% pet.scan.cpts,
-                            pet.scan.date = if_else(pet.scan, CLM_THRU_DT, as.Date(NA_Date_)),
-                            days.between.pet.and.treatment =  tx.date - pet.scan.date,
-                            )
+# Look up each of the HCPCS codes from procs, defined in codes.R
+proc.hardcodeds  <- patient.tx %>% select(PATIENT_ID)
+procois  <- c(procs) 
+for (i in 1:length(procois)) {
+    print(sprintf('%d/%d procedures', i, length(procois)))
+    proc.name  <-  names(procois)[i]
+    procoi  <- procois[[i]]
+    proc.hardcoded  <- procs.long %>% 
+             mutate( 
+                    temp =   HCPCS_CD %in% procoi,
+                    temp.pre =  if_else(temp & (CLM_THRU_DT < tx.date), CLM_THRU_DT, ymd(NA_character_)), 
+                    temp.post =  if_else(temp & (CLM_THRU_DT > tx.date), CLM_THRU_DT, ymd(NA_character_))  ,
+                    temp.any =  if_else(temp , CLM_THRU_DT, ymd(NA_character_))  
+                    )  %>% 
+             group_by(PATIENT_ID) %>% 
+             summarise( 
+                          !!proc.name := first(na.omit(temp.post)), 
+                          # !!sprintf('%s_pre', proc.name ) := first(na.omit(temp.pre)),
+                          # !!sprintf('%s_any', proc.name ) := first(na.omit(temp.any)),
+                          !!sprintf('%s_pre_count', proc.name ) := length((na.omit(temp.pre))),
+                          # !!sprintf('%s_pre_date_count', proc.name ) := length(unique(na.omit(temp.pre))),
+                          !!sprintf('%s_any_count', proc.name ) := length((na.omit(temp.any))),
+                          # !!sprintf('%s_any_date_count', proc.name ) := length(unique(na.omit(temp.any))),
+                          !!sprintf('%s_post_count', proc.name ) := length((na.omit(temp.post))),
+                          # !!sprintf('%s_post_date_count', proc.name ) := length(unique(na.omit(temp.post)))
+             )
+             proc.hardcodeds  <- proc.hardcodeds %>% left_join(proc.hardcoded, by='PATIENT_ID')
+}
+pet.scans <- procs.long   %>%
+        mutate(
+            pet.scan    = HCPCS_CD %in% pet.scan.cpts,
+            pet.scan.date = if_else(pet.scan, CLM_THRU_DT, as.Date(NA_Date_)),
+            days.between.pet.and.treatment =  tx.date - pet.scan.date,
+        ) %>% 
+        filter (pet.scan) %>% 
+        mutate(
+               pet.scan.within.year = days.between.pet.and.treatment>=0 & days.between.pet.and.treatment<=360
+               ) %>% 
+        group_by(PATIENT_ID) %>% 
+        summarise( valid.pet.scan = any(pet.scan.within.year))
 
-patient.outpatient.procs <- patient.outpatient.procs   %>% 
-                            filter (pet.scan) %>% 
-                            mutate(
-                                   pet.scan.within.year = days.between.pet.and.treatment>=0 & days.between.pet.and.treatment<=360
-                                   ) %>% 
-                            group_by(PATIENT_ID) %>% 
-                            summarise( valid.pet.scan = any(pet.scan.within.year))
+patient.outpatient.procs  <-  proc.hardcodeds %>% left_join( pet.scans, by = 'PATIENT_ID') %>% replace_na(list( valid.pet.scan = F))  %>%
+    mutate(across(contains('count'), ~replace(., is.na(.), 0)))
 
 
 
@@ -593,12 +646,12 @@ A.final %>% filter (tx =='sbrt') %>% count(year(tx.date))
 
 comorbidities  <-  c('DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal', 'Stroke',  'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis', 'HIV', 'Smoking', 'Oxygen')
 tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
-f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list),comorbidities, sprintf('%s_any_count', names(negative.outcomes)), sprintf('%s_pre_count', names(negative.outcomes))), collapse = "+") )
+f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list),comorbidities, sprintf('%s_any_count', c(names(negative.outcomes), names(procs))), sprintf('%s_pre_count', c(names(negative.outcomes), names(procs) ) )), collapse = "+") )
 labels(A.final)  <-  label_list
 tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
-summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars2.htm')
+summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars3.htm')
 
-filename.out  <-  'data/A.final.all.gte.65.RDS' 
+filename.out  <-  'data/A.final2.all.gte.65.RDS' 
 A.final %>% select ( PATIENT_ID:death.date.mbsf, names(label_list), tt, time.enrolled) %>%  write_rds( filename.out)
 write_rds( label_list,'data/label.list.RDS')
 
