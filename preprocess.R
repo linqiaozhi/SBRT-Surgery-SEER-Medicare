@@ -248,46 +248,45 @@ dx.long  <- dx.wide %>%
 dx.long  <- dx.long %>% 
     mutate( icd9or10 = ifelse( CLM_THRU_DT >= ymd('20151001'), 'icd10', 'icd9'  ))
 
-dx.long.icd9.pre  <-  dx.long %>% filter( icd9or10 == 'icd9', CLM_THRU_DT < tx.date)
-dx.long.icd10.pre  <-  dx.long %>% filter( icd9or10 == 'icd10', CLM_THRU_DT < tx.date)
+#dx.long.icd9.pre  <-  dx.long %>% filter( icd9or10 == 'icd9', CLM_THRU_DT < tx.date)
+#dx.long.icd10.pre  <-  dx.long %>% filter( icd9or10 == 'icd10', CLM_THRU_DT < tx.date)
 
-# Using the Quan comorbidity scores
-dx.long.quan.icd9  <-  icd9_comorbid_quan_deyo( dx.long.icd9.pre %>% select(ID_DATE, DX),
-                           return_df = T) 
-dx.long.quan.icd10  <-  icd10_comorbid_quan_deyo( dx.long.icd10.pre %>% select(ID_DATE, DX),
-                           return_df = T) 
-dx.long.quan  <-  rbind(dx.long.quan.icd9,dx.long.quan.icd10) %>% 
-    filter (rowSums(select(., MI:HIV)) > 0 ) %>%
-    as_tibble %>% 
-    separate (ID_DATE, c("PATIENT_ID", "CLM_THRU_DT"), sep = '_') %>% 
-    mutate( CLM_THRU_DT = ymd(CLM_THRU_DT)) %>% 
-    arrange( PATIENT_ID, CLM_THRU_DT)
+## Using the Quan comorbidity scores
+#dx.long.quan.icd9  <-  icd9_comorbid_quan_deyo( dx.long.icd9.pre %>% select(ID_DATE, DX),
+#                           return_df = T) 
+#dx.long.quan.icd10  <-  icd10_comorbid_quan_deyo( dx.long.icd10.pre %>% select(ID_DATE, DX),
+#                           return_df = T) 
+#dx.long.quan  <-  rbind(dx.long.quan.icd9,dx.long.quan.icd10) %>% 
+#    filter (rowSums(select(., MI:HIV)) > 0 ) %>%
+#    as_tibble %>% 
+#    separate (ID_DATE, c("PATIENT_ID", "CLM_THRU_DT"), sep = '_') %>% 
+#    mutate( CLM_THRU_DT = ymd(CLM_THRU_DT)) %>% 
+#    arrange( PATIENT_ID, CLM_THRU_DT)
 
-dx.long.quan.long  <-  dx.long.quan  %>% replace(. == F, NA) %>% 
-    pivot_longer(-c(PATIENT_ID, CLM_THRU_DT), 
-                 names_to = 'comorbidity', 
-                 values_to = 'comorbidity.present', 
-                 values_drop_na = T)
+#dx.long.quan.long  <-  dx.long.quan  %>% replace(. == F, NA) %>% 
+#    pivot_longer(-c(PATIENT_ID, CLM_THRU_DT), 
+#                 names_to = 'comorbidity', 
+#                 values_to = 'comorbidity.present', 
+#                 values_drop_na = T)
 
-dx.quan  <-  dx.long.quan.long %>% 
-                group_by(PATIENT_ID, comorbidity) %>% 
-                #mutate( time.from.last =  CLM_FROM_DT - first(CLM_FROM_DT)) %>% 
-                #arrange(PATIENT_ID, comorbidity) %>% 
-# Use this to require at >1 visits at certain time separation
-                #summarise( meets.criteria = max( as.numeric(time.from.last, units='days') ) >= 30 ) %>% 
-                summarise( meets.criteria = T) %>% 
-                filter(meets.criteria) %>%
-                pivot_wider( names_from =comorbidity, values_from = meets.criteria, values_fill = F )  
+#dx.quan  <-  dx.long.quan.long %>% 
+#                group_by(PATIENT_ID, comorbidity) %>% 
+#                #mutate( time.from.last =  CLM_FROM_DT - first(CLM_FROM_DT)) %>% 
+#                #arrange(PATIENT_ID, comorbidity) %>% 
+## Use this to require at >1 visits at certain time separation
+#                #summarise( meets.criteria = max( as.numeric(time.from.last, units='days') ) >= 30 ) %>% 
+#                summarise( meets.criteria = T) %>% 
+#                filter(meets.criteria) %>%
+#                pivot_wider( names_from =comorbidity, values_from = meets.criteria, values_fill = F )  
 
 
-# Using hardcoded codes
+## Using hardcoded codes
 
 dx.hardcodeds  <- patient.tx %>% select(PATIENT_ID)
-dxois  <- c(negative.outcomes, manual.comorbidities) 
-for (i in 1:length(dxois)) {
-    print(sprintf('%d/%d hard coded dx', i, length(dxois)))
-    dxoi  <- dxois[[i]]
-    dx.name  <-  names(dxois)[i]
+for (i in 1:length(dx.icd)) {
+    print(sprintf('%d/%d hard coded dx', i, length(dx.icd)))
+    dxoi  <- dx.icd[[i]]
+    dx.name  <-  names(dx.icd)[i]
     dx.hardcoded  <- dx.long %>% 
              mutate( 
                     temp = if_else ( icd9or10 == 'icd9', DX %in% dxoi$icd9,DX %in% dxoi$icd10 ),
@@ -315,8 +314,8 @@ first.dx  <- dx.long %>% arrange(PATIENT_ID, CLM_THRU_DT)
 first.dx <- first.dx %>% group_by(PATIENT_ID) %>% summarise( first.dx.date = first(CLM_THRU_DT))
 
 patient.dx   <-  dx.hardcodeds   %>%
-    left_join(dx.quan, by ='PATIENT_ID') %>%   
-    mutate(across(colnames(dx.quan), ~replace(., is.na(.), FALSE))) %>% 
+    # left_join(dx.quan, by ='PATIENT_ID') %>%   
+    # mutate(across(colnames(dx.quan), ~replace(., is.na(.), FALSE))) %>% 
     mutate(across(contains('count'), ~replace(., is.na(.), 0))) %>%
     left_join(first.dx)
 
@@ -646,12 +645,14 @@ A.final %>% filter (tx =='sbrt') %>% count(year(tx.date))
 
 comorbidities  <-  c('DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal', 'Stroke',  'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis', 'HIV', 'Smoking', 'Oxygen')
 tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
-f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list),comorbidities, sprintf('%s_any_count', c(names(negative.outcomes), names(procs), names(manual.comorbidities))), sprintf('%s_pre_count', c(names(negative.outcomes), names(procs) ) )), collapse = "+") )
+f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list), 
+                sprintf('%s_any_count', c(names(dx.icd), names(procs), )), 
+                sprintf('%s_pre_count', c(names(dx.icd), names(procs) ) )), collapse = "+") )
 labels(A.final)  <-  label_list
 tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
 summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars3.htm')
 
-filename.out  <-  'data/A.final2.all.gte.65.RDS' 
+filename.out  <-  'data/A.final3.all.gte.65.RDS' 
 A.final %>% select ( PATIENT_ID:death.date.mbsf, names(label_list), tt, time.enrolled) %>%  write_rds( filename.out)
 write_rds( label_list,'data/label.list.RDS')
 

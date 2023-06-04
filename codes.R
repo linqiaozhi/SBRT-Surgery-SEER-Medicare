@@ -21,9 +21,21 @@ expand.each.code  <-  function(code.list, icd9or10 = 'undefined') {
     for (i in 1:length(code.list)) {
         code  <- code.list[i]
         if (icd9or10 == 'undefined') {
-            out.list  <-  c(out.list, expand_range(code, code))
+            try.out <- try(expand_range(code, code), silent = T)
+            if (!inherits(try.out, "try-error")) {
+                out.list  <-  c(out.list, try.out)
+            }else{
+                out.list  <-  c( out.list, code)
+                warning(sprintf('Could not find %s', code))
+            }
         } else if (icd9or10 == 'icd10') {
-            out.list  <-  c(out.list, expand_range(as.icd10cm(code), as.icd10cm(code)))
+            try.out <- try(expand_range(as.icd10cm(code), as.icd10cm(code)), silent = T)
+            if (!inherits(try.out, "try-error")) {
+                out.list  <-  c(out.list, try.out)
+            }else{
+                out.list  <-  c( out.list, code)
+                warning(sprintf('Could not find %s', code))
+            }
         }else{
             out.list  <-  c(out.list, expand_range(as.icd9(code), as.icd9(code)))
         }
@@ -93,15 +105,15 @@ dx.icd   <- list (
      'oral' = list(
         'icd9' = expand_range('520','5299'),
         'icd10' =  expand_range('K00', 'K149')),
-     # 'hpb' = list(
-     #    'icd9' = expand_range('570','577'),
-     #    'icd10' =  expand_range('K70', 'K87')),
+      'pancreatic' = list(
+         'icd9' = expand_range('577','577'),
+         'icd10' =  expand_range('K85', 'K86')),
      'gout' = list(
         'icd9' = expand_range('2740','2749'),
         'icd10' =  expand_range('M100', 'M109')),
      'arthropathy' = list(
-        'icd9' = c(expand_range('711', '715')),
-        'icd10' = c(  expand_range('M00', 'M19'))),
+        'icd9' = setdiff(expand_range('711', '715'), expand_range( '2740', '2749')),
+        'icd10' = setdiff ( expand_range('M00', 'M19'), expand_range('M100', 'M109'))),
      'GU_sx' = list(
         'icd9' = c(expand_range('590', '599'), expand_range('788','78899')),
         'icd10' = c(  expand_range('R30', 'R39')), expand_range('N30', 'N39')),
@@ -147,95 +159,88 @@ dx.icd   <- list (
      #    'icd9' = c('410','412') ,
      #    'icd10' =  c('I21','I22','I252')),
      'CHF' = list(
-        'icd9' = c('39891','40201','40211','40291','40401','40403','40411','40413','40491','40493','4254','4255','4257','4258','4259','428') ,
-        'icd10' =  c('I43','I50','I099','I110','I130','I132', 'I255','I420','I425','I426','I427','I428','I429','P290')),
+        # 'icd9' = c('39891','40201','40211','40291','40401','40403','40411','40413','40491','40493','4254','4255','4257','4258','4259','428') ,
+         'icd9' = expand.each.code(c('39891','40201','40211','40291','40401','40411','40491','4254','4255','4257','4258','4259','428')) ,
+        # 'icd10' =  c('I43','I50','I099','I110','I130','I132', 'I255','I420','I425','I426','I427','I428','I429','P290')),
+         'icd10' =  expand.each.code(c('I43','I50','I099','I110','I130','I132', 'I420','I425','I426','I427','I428','I429','P290'))),
      'PVD' = list(
-        'icd9' = c('0930','4373','440','441','4431','4432','4438','4439','4471','5571','5579','V434'),
-        'icd10' =  c('I70','I71', 'I731','I738','I739','I771', 'I790','I792','K551','K558','K559','Z958','Z959')),
+        'icd9' = expand.each.code(c('0930','440','441','4431','4432','4438','4439','4471','5571','5579','V434')),
+        'icd10' =  expand.each.code(c('I70','I71', 'I731','I738','I739','I771', 'I790','K551','K558','K559','Z958','Z959'))), # removed 'I792',
      'CVD' = list(
         # 'icd9' = c('36234','430','431','432','433','434','435','436','437','438'),
-         'icd9' = c('430','431','432','433','434','435','436','437','438'),
+         'icd9' = expand.each.code(c('430','431','432','433','434','435','436','437','438')),
         # 'icd10' =  c('G45','G46','I60','I61','I62','I63','I64','I65','I66','I67','I68','I69','H340')),
-        'icd10' =  c('G45','G46','I60','I61','I62','I63','I64','I65','I66','I67','I68','I69')),
+        'icd10' =  c( 'I64', expand.each.code(c('G45','G46','I60','I61','I62','I63','I65','I66','I67','I68','I69')))),
      'dementia' = list(
-        'icd9' = c('290','2941','3312'),
-        'icd10' =  c('F00','F01','F02','F03','G30','F051','G311')),
+        'icd9' = expand.each.code(c('290','2941','3312')),
+        'icd10' =  expand.each.code(c('F01','F02','F03','G30','G311'))),# removed F00*
      'COPD' = list(
-        'icd9' = c('4168','4169','490','491','492','493','494','495','496','500','501','502','503','504','505','5064','5081','5088'),
-        'icd10' =  c('J40','J41','J42','J43','J44','J45','J46','J47', 'J60','J61','J62','J63','J64','J65','J66','J67', 'I278','I279','J684','J701','J703')),
-     'rheum' = list(
-        'icd9' = c('4465','7100','7101','7102','7103','7104','7140','7141','7142','7148','725'),
-        'icd10' =  c('M05','M32','M33','M34','M06','M315','M351','M353','M360')),
+        'icd9' = expand.each.code(c('4168','4169','490','491','492','493','494','495','496','500','501','502','503','504','505','5064','5081','5088')),
+        'icd10' =  expand.each.code(c('J40','J41','J42','J43','J44','J45','J46','J47', 'J60','J61','J62','J63','J64','J65','J66','J67', 'I278','I279','J684','J701','J703'))),
      'PUD' = list(
-        'icd9' = c('531','532','533','534'),
-        'icd10' =  c('K25','K26','K27','K28')),
+        'icd9' = expand.each.code(c('531','532','533','534')),
+        'icd10' =  expand.each.code(c('K25','K26','K27','K28'))),
      'MILDLD' = list(
-        'icd9' = c('07022','07023','07032','07033','07044','07054','0706','0709','570','571','5733','5734','5738','5739','V427'),
-        'icd10' =  c('B18','K73','K74','K700','K701','K702','K703','K709', 'K717','K713','K714','K715','K760','K762','K763','K764','K768','K769','Z944')),
+        'icd9' = expand.each.code(c('07022','07023','07032','07033','07044','07054','0706','0709','570','571','5733','5734','5738','5739','V427')),
+        'icd10' =  expand.each.code(c('B18','K73','K74','K700','K701','K702','K703','K709', 'K717','K713','K714','K715','K760','K762','K763','K764','K768','K769','Z944'))),
      'DIAB_UC' = list(
-        'icd9' = c('2500','2501','2502','2503','2508','2509'),
-        'icd10' =  c('E100','E101','E106','E108','E109','E110','E111','E116','E118','E119', 'E120','E121','E126','E128','E129', 'E130','E131','E136','E138','E139', 'E140','E141','E146','E148','E149')),
+        'icd9' = expand.each.code(c('2500','2501','2502','2503','2508','2509')),
+        'icd10' =  expand.each.code(c('E100','E101','E106','E108','E109','E110','E111','E116','E118','E119', 'E120','E121','E126','E128','E129', 'E130','E131','E136','E138','E139', 'E140','E141','E146','E148','E149'), icd9or10 = 'icd10')),
      'DIAB_C' = list(
-        'icd9' = c('2504','2505','2506','2507'),
-        'icd10' =  c('E102','E103','E104','E105','E107', 'E112','E113','E114','E115','E117', 'E122','E123','E124','E125','E127', 'E132','E133','E134','E135','E137', 'E142','E143','E144','E145','E147')),
+        'icd9' = expand.each.code(c('2504','2505','2506','2507')),
+        'icd10' =  expand.each.code(c('E102','E103','E104','E105','E107', 'E112','E113','E114','E115','E117', 'E122','E123','E124','E125','E127', 'E132','E133','E134','E135','E137', 'E142','E143','E144','E145','E147'), 'icd10')),
      'PARA' = list(
-        'icd9' = c('3341','342','343','3440','3441','3442','3443','3444','3445','3446','3449'),
-        'icd10' =  c('G81','G82','G041','G114','G801','G802', 'G830','G831','G832','G833','G834','G839')),
+        'icd9' = expand.each.code(c('3341','342','343','3440','3441','3442','3443','3444','3445','3446','3449')),
+        'icd10' =  expand.each.code(c('G81','G82','G041','G114','G801','G802', 'G830','G831','G832','G833','G834','G839'))),
      'RD' = list(
-        'icd9' = c('40301','40311','40391','40402','40403','40412','40413','40492','40493','582','5830','5831','5832','5834','5836','5837','585','586','5880','V420','V451','V56'),
-        'icd10' =  c('N18','N19','N052','N053','N054','N055','N056','N057', 'N250','I120','I131','N032','N033','N034','N035','N036','N037', 'Z490','Z491','Z492','Z940','Z992')),
+        'icd9' = expand.each.code(c('40301','40311','40391','40402','40403','40412','40413','40492','40493','582','5830','5831','5832','5834','5836','5837','585','586','5880','V420','V451','V56')),
+        'icd10' =  expand.each.code(c('N18','N19','N052','N053','N054','N055','N056','N057', 'N250','I120','I131','N032','N033','N034','N035','N036','N037', 'Z490','Z491','Z492','Z940','Z992'))),
      'cancer_nonlung' = list(
-        'icd9' = setdiff(c('140','141','142','143','144','145','146','147','148','149','150','151','152','153','154','155','156','157','158','159','160','161','162','163','164','165','170','171','172','174','175','176','179','180','181','182','183','184','185','186','187','188','189','190','191','192','193','194','195','200','201','202','203','204','205','206','207','208','2386'),valid.dxs),
-        'icd10' =  setdiff(c('C00','C01','C02','C03','C04','C05','C06','C07','C08','C09', 'C10','C11','C12','C13','C14','C15','C16','C17','C18','C19', 'C20','C21','C22','C23','C24','C25','C26', 'C30','C31','C32','C33','C34','C37','C38','C39', 'C40','C41','C43','C45','C46','C47','C48','C49', 'C50','C51','C52','C53','C54','C55','C56','C57','C58', 'C60','C61','C62','C63','C64','C65','C66','C67','C68','C69', 'C70','C71','C72','C73','C74','C75','C76', 'C81','C82','C83','C84','C85','C88', 'C90','C91','C92','C93','C94','C95','C96','C97'),valid.dxs)),
+        'icd9' = setdiff(expand.each.code(c('140','141','142','143','144','145','146','147','148','149','150','151','152','153','154','155','156','157','158','159','160','161','162','163','164','165','170','171','172','174','175','176','179','180','181','182','183','184','185','186','187','188','189','190','191','192','193','194','195','200','201','202','203','204','205','206','207','208','2386')),valid.dxs),
+        'icd10' =  setdiff(expand.each.code(c('C00','C01','C02','C03','C04','C05','C06','C07','C08','C09', 'C10','C11','C12','C13','C14','C15','C16','C17','C18','C19', 'C20','C21','C22','C23','C24','C25','C26', 'C30','C31','C32','C33','C34','C37','C38','C39', 'C40','C41','C43','C45','C46','C47','C48','C49', 'C50','C51','C52','C53','C54','C55','C56','C57','C58', 'C60','C61','C62','C63','C64','C65','C66','C67','C68','C69', 'C70','C71','C72','C73','C74','C75','C76', 'C81','C82','C83','C84','C85','C88', 'C90','C91','C92','C93','C94','C95','C96','C97')),valid.dxs)),
      'MSLD' = list(
-        'icd9' = c('4560','4561','4562','5722','5723','5724','5728'),
-        'icd10' =  c('K704','K711','K721','K729','K765','K766','K767','I850','I859','I864','I982')),
+        'icd9' = expand.each.code(c('4560','4561','4562','5722','5723','5724','5728')),
+        'icd10' =  expand.each.code(c('K704','K711','K721','K729','K765','K766','K767','I850','I859','I864','I982'))),
      'METS' = list(
-        'icd9' = c('196','197','198','199'),
-        'icd10' =  c('C77','C78','C79','C80')),
+        'icd9' = expand.each.code(c('196','197','198','199')),
+        'icd10' =  expand.each.code(c('C77','C78','C79','C80'))),
      'HIV' = list(
-        'icd9' = c('042','043','044'),
-        'icd10' =  c('B20','B21','B22','B24'))
+        'icd9' =expand.each.code( c('042','043','044')),
+        'icd10' = expand.each.code( c('B20','B21','B22','B24')))
 )
-
-
-
-
-
 dx.icd  <- c( dx.icd, 
-     'mental_disorders' = list(
+     list ( 'mental_disorders' = list(
         'icd9' = setdiff( expand_range('290', '294'), dx.icd[['dementia']]$icd9) ,
         'icd10' = setdiff(expand_range('F01','F99'), dx.icd[['dementia']]$icd10)
      ),
      'nervous_system' = list(
-        'icd9' = setdiff( expand_range( '320', '359'),  dx.icd[['dementia']]$icd9  ),
-        'icd10' =setdiff( expand_range('G00', 'G99'),   dx.icd[['dementia']]$icd10 ) ),
+        'icd9' = setdiff( expand_range( '320', '359'), c(dx.icd[['PARA']]$icd9,  dx.icd[['CVD']]$icd9,  dx.icd[['dementia']]$icd9  )),
+        'icd10' =setdiff( expand_range('G00', 'G99'),c(  dx.icd[['PARA']]$icd10, dx.icd[['CVD']]$icd10, dx.icd[['dementia']]$icd10 )) ),
      'other_heart_disease' = list(
         'icd9' = setdiff ( expand_range( '390', '429'), 
-                          c( dx.icd[['CHF']]$icd9,dx.icd[['ischemic_heart_disease']]$icd9 , dx.icd[['COPD']]$icd9)  ),
+                          c( dx.icd[['RD']]$icd9,dx.icd[['CHF']]$icd9,dx.icd[['ischemic_heart_disease']]$icd9 , dx.icd[['COPD']]$icd9)  ),
         'icd10' =setdiff ( expand_range('I00','I52'),  
-                          c( dx.icd[['CHF']]$icd10 , dx.icd[['ischemic_heart_disease']]$icd10, dx.icd[['COPD']]$icd10  ))
+                          c( dx.icd[['RD']]$icd10,dx.icd[['CHF']]$icd10 , dx.icd[['ischemic_heart_disease']]$icd10, dx.icd[['COPD']]$icd10  ))
      ),
      'veins_lymphatics_other_circulatory' = list(
-        'icd9' = setdiff(  c(expand_range( '451', '459')), dx.icd[['hemorrhoids']]$icd9 ),
-        'icd10' =setdiff(  c( expand.each.code(c( 'I80',  'I86', 'I89', 'I95', 'I99', 'K64')), expand_range('I81', 'I83') ),  dx.icd[['hemorrhoids']]$icd10) 
-     )
-     )
+        'icd9' = setdiff(  c(expand_range( '451', '459')), c (  dx.icd[['MSLD']]$icd9, dx.icd[['hemorrhoids']]$icd9 )),
+        'icd10' =setdiff(  c( expand.each.code(c( 'I80',  'I86', 'I89', 'I95', 'I99', 'K64')), expand_range('I81', 'I83') ),  c (  dx.icd[['MSLD']]$icd10,dx.icd[['hemorrhoids']]$icd10) )
+     ),
+     'rheum' = list(
+        'icd9' = setdiff( expand.each.code(c('4465','7100','7101','7102','7103','7104','7140','7141','7142','7148','725')),
+                         dx.icd[['arthropathy']]$icd9),
+        'icd10' =  setdiff(
+                           expand.each.code(c('M05','M32','M33','M34','M06','M315','M351','M353','M360')),
+                          dx.icd[['arthropathy']]$icd10 ))
+     ))
 
 
 # check for duplicates
-
-
-sink('fofo.txt')
 dx.icd.codes  <-  unlist(dx.icd)
-fifi  <-  duplicated(dx.icd.codes)
-dx.icd.codes[dx.icd.codes %in%  dx.icd.codes[fifi]]
-sink()
-
+dx.icd.codes[dx.icd.codes %in%  dx.icd.codes[ duplicated(dx.icd.codes)]]
 
 
 pet.scan.cpts <-c('78811', '78812', '78813', '78814', '78815', '78816', 'G0235')
- ambulance.cpts <-c()
 
 
 procs  <- list (
@@ -251,7 +256,6 @@ procs  <- list (
 
 
 
-if (F) { 
 sink('tbls/dx.icd.txt'); 
 for (namei in (names(dx.icd))) { 
     cat(sprintf('Variable Name: %s', namei))
@@ -260,10 +264,12 @@ for (namei in (names(dx.icd))) {
     cat(sprintf('%s\n', paste(icd9.codes, explain_code(condense=F, as.icd9(icd9.codes)))))
     print('ICD10')
     icd10.codes  <-  dx.icd[[namei]][['icd10']]
-    cat(sprintf('%s\n', paste(icd10.codes, explain_code(condense=F, as.icd10(icd10.codes)))))
+    cat(sprintf('%s\n', paste(icd10.codes, explain_code(condense=F, as.icd10cm(icd10.codes)))))
     cat('------------------------------\n\n\n\n')
 } 
 sink()
+#TODO:Explain_code doesn't work for the ICD10 codes starting with E. The expand_range does, so the code all works, but the output above gives NA for the E* codes. need to use explain_icd9_10( as.icd10('E033'))
+
 sink('tbls/proc.codes.txt'); 
 for (namei in names(procs)) { 
     cat(sprintf('Variable Name: %s', namei))
@@ -271,4 +277,3 @@ for (namei in names(procs)) {
     cat('------------------------------\n\n\n\n')
 } 
 sink()
-}
