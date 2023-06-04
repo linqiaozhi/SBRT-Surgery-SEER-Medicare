@@ -646,7 +646,7 @@ A.final %>% filter (tx =='sbrt') %>% count(year(tx.date))
 
 comorbidities  <-  c('DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal', 'Stroke',  'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis', 'HIV', 'Smoking', 'Oxygen')
 tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
-f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list),comorbidities, sprintf('%s_any_count', c(names(negative.outcomes), names(procs))), sprintf('%s_pre_count', c(names(negative.outcomes), names(procs) ) )), collapse = "+") )
+f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list),comorbidities, sprintf('%s_any_count', c(names(negative.outcomes), names(procs), names(manual.comorbidities))), sprintf('%s_pre_count', c(names(negative.outcomes), names(procs) ) )), collapse = "+") )
 labels(A.final)  <-  label_list
 tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
 summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars3.htm')
