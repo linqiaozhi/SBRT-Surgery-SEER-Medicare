@@ -19,16 +19,18 @@ source('file.paths.R')
 #             1. Carrier line file contains both procedure and the daignosis for which it was performed.        
 #             2.  Outpatient Revenue file contains procedures, link it with Outpatient Line file to confirm diagnosis for each procedure is lung cancer.
 #       3. Combine everything into a single dataframe patient.tx, with three two columns: PATIENT_ID, tx.date, tx
+#       4. Create a center volume variable - 1) for SBRT and 2) for sublobar resection 
 # III. Identify diagnoses (comorbidities and negative control outcomes). Output: patient.dx
 #       1. Combine long versions of medpar, outpatient line, and carrier base. Filter each by patient.tx. Results in dataframes into all.long.icd9.dx, all.long.icd10.dx
 #       2. Identify comorbidities of interest, patient.comorbidities
 #       3. Identify negative outcome diagnoses of interest, patient.noc
 # IV. Identify procedures (for now, just PET). Output: patient.proc
 #       1. 
-# V. Identify death using MBSF, resulting in patient.mbsf.death
-# V. Combine patient.tx,  patient.dx, patient.proc, patient.mbsf.death, patient.seer
-# VI. Massage variables
-# VII. Filter
+# V.  Part D files 
+# VI. Identify death using MBSF, resulting in patient.mbsf.death
+# VII. Combine patient.tx,  patient.dx, patient.proc, patient.mbsf.death, patient.seer
+# VII. Massage variables
+# IV. Filter
 
 
 
@@ -61,7 +63,7 @@ if ( ! file.exists (fn.RDS) ) {
     for (yeari in 1:length(years)) {
         year  <-  years[yeari]
         print(year)
-        medpari  <-   read_dta(sprintf('%s/medpar%s.dta', data.path, year), col_select=c(PATIENT_ID, ADMSN_DT,  DSCHRG_DT, SRGCL_PRCDR_IND_SW, DGNS_1_CD:DGNS_25_CD, SRGCL_PRCDR_1_CD:SRGCL_PRCDR_25_CD, SRGCL_PRCDR_PRFRM_1_DT:SRGCL_PRCDR_PRFRM_25_DT))
+        medpari  <-   read_dta(sprintf('%s/medpar%s.dta', data.path, year), col_select=c(PATIENT_ID, ADMSN_DT,  DSCHRG_DT, SRGCL_PRCDR_IND_SW, DGNS_1_CD:DGNS_25_CD, SRGCL_PRCDR_1_CD:SRGCL_PRCDR_25_CD, SRGCL_PRCDR_PRFRM_1_DT:SRGCL_PRCDR_PRFRM_25_DT, 'ORG_NPI_NUM'))
         # inner join with the SEER patients to reduce size
         medpars[[year]]  <-  medpari %>% inner_join(lung.SEER.pids) 
         medpars[[year]]$sbrt.date  <-  get.dates.of.procedure( medpars[[year]], sbrt.icds  )
@@ -86,7 +88,7 @@ medpar <- medpar %>% mutate(
 medpar$sbrt.date[ ! medpar$actually.lung.cancer ]  <- as.Date(NA_Date_)
 
 ################################
-# II.2.1 OUtpatients: Carrier line 
+# II.2.1 Outpatients: Carrier File
 ################################
 # We won't use the carrier base file for identifying procedures, but we will need it later.
 years  <-  as.character(2010:2019)
@@ -119,7 +121,7 @@ if (!file.exists( fn )) {
         year  <-  years[yeari]
         dta.fn  <-  sprintf('../SEER-Medicare-data/data/SEER_Medicare/nch%s.line.dta.gz', year )
         print(sprintf('Reading in %s', dta.fn))
-       carrieri  <-   read_dta(dta.fn, col_select=c('PATIENT_ID', 'CLM_THRU_DT', 'HCPCS_CD', 'LINE_ICD_DGNS_CD'))
+       carrieri  <-   read_dta(dta.fn, col_select=c('PATIENT_ID', 'CLM_THRU_DT', 'HCPCS_CD', 'LINE_ICD_DGNS_CD', 'ORG_NPI_NUM'))
         carriers[[year]]  <- carrieri %>% inner_join(lung.SEER.pids)  
     }
     carrier  <-  bind_rows(carriers,  .id='dataset.year')
@@ -169,7 +171,7 @@ if ( ! file.exists (fn.RDS) ) {
     for (yeari in 1:length(years)) {
         year  <-  years[yeari]
         print(year)
-        outpati  <-   read_dta(sprintf('%s/outpat%s.base.dta', data.path, year), col_select=c('PATIENT_ID', 'CLM_ID', 'CLM_FROM_DT', 'CLM_THRU_DT', PRNCPAL_DGNS_CD:PRCDR_DT25))
+        outpati  <-   read_dta(sprintf('%s/outpat%s.base.dta', data.path, year), col_select=c('PATIENT_ID', 'CLM_ID', 'CLM_FROM_DT', 'CLM_THRU_DT', PRNCPAL_DGNS_CD:PRCDR_DT25, 'ORG_NPI_NUM'))
         # inner join with the SEER patients to reduce size
         outpats[[year]]  <-  outpati %>% 
             inner_join(lung.SEER.pids) %>%select( ! contains( "PRCDR_DT")) 
@@ -193,7 +195,7 @@ outpat.outpat.revenue <- outpat.outpat.revenue %>% mutate(
 
 
 ################################
-# II.3 Combine all three sources of treatmnt codes
+# II.3 Combine all three sources of treatment codes
 ################################
 medpar.tx  <-   medpar %>% select ( PATIENT_ID, sbrt.date, sublobar.date, other.resection.date) %>% filter(!is.na(sbrt.date) | !is.na(sublobar.date) )
 carrier.tx  <-  carrier %>% select(PATIENT_ID, sbrt.date) %>% filter(!is.na(sbrt.date))
@@ -405,9 +407,32 @@ patient.outpatient.procs  <-  proc.hardcodeds %>% left_join( pet.scans, by = 'PA
 
 
 
+################################
+# SECTION V Part D 
+################################
+
+fn.RDS  <- sprintf("%s/PartD.RDS", rds.path)
+ if ( ! file.exists (fn.RDS) ) {
+  PartD.files  <-  list()
+  years  <-  as.character(2009:2019)
+  for (yeari in 1:length(years)) {
+    year  <-  years[yeari]
+    print(year)
+    PartD.filei  <-   read_dta(sprintf('%s/Part D files/pdesaf%s.dta', data.path, year) , 
+                               col_select=c('PATIENT_ID', 'SRVC_DT',  'PROD_SRVC_ID'))
+    PartD.files[[year]]  <-  PartD.filei %>% inner_join(lung.SEER.pids)
+  }
+  PartD.file  <-  bind_rows(PartD.files,  .id='dataset.year')
+  saveRDS(object = PartD.file, file = fn.RDS) 
+} else{
+  PartD.file  <-  readRDS(fn.RDS)
+}
+
+PartD.file$prescription.date<-ymd(PartD.file$SRVC_DT)
+
 
 ################################
-# SECTION V MBSF death
+# SECTION VI MBSF death
 ################################
 
 fn.RDS  <- sprintf("%s/MBSF.RDS", rds.path)
@@ -439,7 +464,7 @@ patient.mbsf  <-  patient.mbsf %>%
 
 
 ################################
-# Section V Combine 
+# Section VII Combine 
 ################################
 
 A  <-  patient.tx %>% 
@@ -450,7 +475,7 @@ A  <-  patient.tx %>%
 
 
 ################################
-# Section VI Massage Variables 
+# Section VIII Massage Variables 
 ################################
 
 topography  <-  read_csv(file= './ICDO3topography.csv') %>% rename(site.topography = description) %>% mutate(PRIMARY_SITE = str_remove_all( icdo3_code, fixed(".")))
@@ -622,7 +647,7 @@ label_list  <-  list(
 
 
 ################################
-# Section VII  Exclusion
+# Section IX  Exclusion
 ################################
 
 A.final  <-  A %>% filter ( tx.date > dx.date & 
