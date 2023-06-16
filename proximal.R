@@ -588,7 +588,7 @@ hazard.ratios.outcomes.two.step  <-  make.odds.ratio.df ( outcome.names.temp)
     dummy.vars  <-  predict(dummyVarsOut, newdata = A.temp)
     adjust.for.2  <- c(adjust.for.scaled[!adjust.for.scaled %in% c('race', 'histology')], colnames(dummy.vars))
     # adjust.for.2  <- c('age_z', 'treatment.year_z', 'O2accessories_pre_count_z', 'transportation_services_pre_count_z', 'CHF_pre_count_z', 'CVD_pre_count_z', 'COPD_pre_count_z', 'PUD_pre_count_z', 'RD_pre_count_z', 'METS_pre_count_z','t_stage_8','sex', 'histologyAdenocarcinoma, NOS','histologySquamous cell carcinoma' )
-      adjust.for.2  <- c('age_z', 'treatment.year_z', 'CVD_pre_count_z', 'COPD_pre_count_z', 'PUD_pre_count_z', 'RD_pre_count_z', 'METS_pre_count_z','t_stage_8','sex', 'histologyAdenocarcinoma, NOS','histologySquamous cell carcinoma' )
+      # adjust.for.2  <- c('age_z', 'treatment.year_z', 'CVD_pre_count_z', 'COPD_pre_count_z', 'PUD_pre_count_z', 'RD_pre_count_z', 'METS_pre_count_z','t_stage_8','sex', 'histologyAdenocarcinoma, NOS','histologySquamous cell carcinoma' )
       # adjust.for.2  <- c('treatment.year_z')
     A.temp.mat  <-  cbind(A.temp, dummy.vars) %>% 
         select(tx, all_of(adjust.for.2), outcome.bool, outcome.time,all_of(Z), all_of(noc.names.temp.no.Z)) %>%
