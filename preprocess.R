@@ -430,6 +430,14 @@ fn.RDS  <- sprintf("%s/PartD.RDS", rds.path)
 
 PartD.file$prescription.date<-ymd(PartD.file$SRVC_DT)
 
+PartD.file<-PartD.file %>% mutate(
+  insulin = PROD_SRVC_ID %in% insulins_all.dxs,
+  insulin.date = ifelse(insulin, SRVC_DT, NA_character_) %>% ymd,
+  anticoagulants = PROD_SRVC_ID %in% anticoagulants_all.dxs,
+  anticoagulants.date = ifelse(anticoagulants, SRVC_DT, NA_character_) %>% ymd
+  )
+
+PartD.file %>% count(insulin)
 
 ################################
 # SECTION VI MBSF death

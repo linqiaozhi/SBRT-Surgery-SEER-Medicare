@@ -208,6 +208,10 @@ dx.icd   <- list (
         'icd9' =expand.each.code( c('042','043','044')),
         'icd10' = expand.each.code( c('B20','B21','B22','B24')))
 )
+
+
+
+
 dx.icd  <- c( dx.icd, 
      list ( 'mental_disorders' = list(
         'icd9' = setdiff( expand_range('290', '294'), dx.icd[['dementia']]$icd9) ,
@@ -250,7 +254,8 @@ procs  <- list (
             'O2accessories' = c ( expand_range_procs ( 'E1353', 'E1406', CPT_Codes)),
             'other_supplies' =  expand_range_procs ( 'A4244', 'A4290', CPT_Codes),
             'diabetic_footwear' =  expand_range_procs ( 'A5500', 'A5513', CPT_Codes),
-            'transportation_services' =  expand_range_procs ( 'A0021', 'A0999', CPT_Codes)
+            'transportation_services' =  expand_range_procs ( 'A0021', 'A0999', CPT_Codes),
+            'chemotherapy' = expand_range_procs ('J9000', 'J9999', CPT_Codes)
                 )
 
 
