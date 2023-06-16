@@ -18,13 +18,16 @@ cox_nc_est <- function(data, A, X, Z, W, Y, event) {
     sum(colMeans(U_q(tau)) ^ 2)
   }
   tau_init <- coef(glm(A ~ Z + X, family = binomial))
-  nlm_out <- nlm(f = G, p = tau_init, iterlim = 500, print.level = 0)
+   nlm_out <- nlm(f = G, p = tau_init, iterlim = 1000, print.level = 2)
+   # nlm_out <- nlm(f = G, p = tau_init, iterlim = 500)
   tau_est <- nlm_out$estimate
-  # print(sprintf('Number of iterations: %d, cost %f', nlm_out$iter, nlm_out$minimum))
-   # print(rbind(tau_init, tau_est))
-   # print(c(G(tau_init), G(tau_est)))
+  # print(tau_est)
+  #  print(sprintf('Number of iterations: %d, cost %f', nlm_out$iter, nlm_out$minimum))
+  #   print(rbind(tau_init, tau_est))
+  #  print(c(G(tau_init), G(tau_est)))
   q_est <- qfunc(tau_est)
   nc_weights <- q_est ^ (1 - A)
+  # browser()
   nc_ph <- coxph(Surv(Y, event) ~ A, weights = nc_weights)
      # glm( A  ~ W , family = poisson) %>% summary %>% print
      # glm( A ~ W, family = poisson, weights = nc_weights) %>% summary %>% print
@@ -36,6 +39,7 @@ cox_nc <- function(data, A, X, Z, W, Y, event, B = 1000, ncores = 1) {
   est_boot <- parallel::mclapply(1:B, function(bb){
     boot_data <- data[sample(nrow(data), replace = T),]
     nc_temp <- try(cox_nc_est(boot_data, A, X, Z, W, Y, event), silent = T)
+    # print('done one')
     if (class(nc_temp) == "try-error") {
       return(NA)
     } else {

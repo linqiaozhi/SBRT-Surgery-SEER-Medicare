@@ -51,11 +51,11 @@ get.dates.of.dx  <-  function( A, proc.codes ) {
 
 
 make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
-    xlims <- c(0.5, 4)
+    xlims <- c(0.3, 4)
     tt  <-  ifelse (hazard, 'Hazard Ratio (log scale)', 'Hazard Ratio (log scale)')
     g <- ggplot(odds.ratios_, aes(x = estimate, y=y_axis)) + 
-        geom_vline(aes(xintercept = 1), size = 0.25, linetype = "dashed") +
-        geom_errorbarh(aes( xmax = high_ci, xmin = low_ci), size = 0.20, height = 0.3)+
+        geom_vline(aes(xintercept = 1), linewidth = 0.25, linetype = "dashed") +
+        geom_errorbarh(aes( xmax = high_ci, xmin = low_ci), linewidth = 0.20, height = 0.3)+
         geom_point(size=1.5) +
         theme_bw() +
         theme(panel.grid.minor = element_blank()) +
@@ -69,7 +69,7 @@ make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
         scale_linetype_manual(values=c("solid","dashed"))+
         scale_shape_manual(values=c(15,17))+
         theme( panel.grid.major.x = element_blank() ,
-              panel.grid.major.y = element_line( size=.05, color="grey", linetype = 'dashed' ),
+              panel.grid.major.y = element_line( linewidth=.05, color="grey", linetype = 'dashed' ),
         legend.position = 'bottom',
       #  legend.title = element_blank(),
         legend.key.size=grid::unit(2,"lines"),
@@ -80,8 +80,8 @@ make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
 make.HD.plot  <-  function (odds.ratios_, label_list2, hazard =F, xlims = c(-0.05,0.25)) {
     tt  <-  'Hazard Difference'
     g <- ggplot(odds.ratios_, aes(x = estimate, y=y_axis)) + 
-        geom_vline(aes(xintercept = 0), size = 0.25, linetype = "dashed") +
-        geom_errorbarh(aes( xmax = high_ci, xmin = low_ci), size = 0.20, height = 0.3)+
+        geom_vline(aes(xintercept = 0), linewidth = 0.25, linetype = "dashed") +
+        geom_errorbarh(aes( xmax = high_ci, xmin = low_ci), linewidth = 0.20, height = 0.3)+
         geom_point(size=1.5) +
         theme_bw() +
         theme(panel.grid.minor = element_blank()) +
@@ -93,7 +93,7 @@ make.HD.plot  <-  function (odds.ratios_, label_list2, hazard =F, xlims = c(-0.0
         scale_linetype_manual(values=c("solid","dashed"))+
         scale_shape_manual(values=c(15,17))+
         theme( panel.grid.major.x = element_blank() ,
-              panel.grid.major.y = element_line( size=.05, color="grey", linetype = 'dashed' ),
+              panel.grid.major.y = element_line( linewidth=.05, color="grey", linetype = 'dashed' ),
         legend.position = 'bottom',
       #  legend.title = element_blank(),
         legend.key.size=grid::unit(2,"lines"),
