@@ -3,6 +3,8 @@
 #Chemotherapies 
 cisplatin.dxs <- c('C9418', 'J9060', 'J9062')
 carboplatin.dxs <- c('J9045')
+warfarin <- c('G8967', '9143')
+lovenox <- c('J1650')
 
 chemotherapies_all.dxs <- c(cisplatin.dxs, carboplatin.dxs)
 
