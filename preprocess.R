@@ -185,6 +185,10 @@ if ( ! file.exists (fn.RDS) ) {
 }
 outpat %>% count (dataset.year)
 
+#Check to see if the ICD procedure codes in outpatient base correspond to any SBRTs
+#outpat %>% filter(ICD_PRCDR_CD1 %in% sbrt.icds) %>% count() #There are no patients who received SBRT 
+#outpat %>% select(ICD_PRCDR_CD1) %>% tally() #All ICD_PRCRD_CD1 codes are empty
+
 outpat.outpat.revenue  <-  outpat  %>% inner_join( outpat.revenue, by = c('PATIENT_ID', 'CLM_ID')) 
 outpat.outpat.revenue <- outpat.outpat.revenue %>% mutate(
     valid.dx  =   PRNCPAL_DGNS_CD %in%  valid.dxs,
@@ -428,16 +432,39 @@ fn.RDS  <- sprintf("%s/PartD.RDS", rds.path)
   PartD.file  <-  readRDS(fn.RDS)
 }
 
-PartD.file$prescription.date<-ymd(PartD.file$SRVC_DT)
 
-PartD.file<-PartD.file %>% mutate(
-  insulin = PROD_SRVC_ID %in% insulins_all.dxs,
-  insulin.date = ifelse(insulin, SRVC_DT, NA_character_) %>% ymd,
-  anticoagulants = PROD_SRVC_ID %in% anticoagulants_all.dxs,
-  anticoagulants.date = ifelse(anticoagulants, SRVC_DT, NA_character_) %>% ymd
-  )
+#Create variables indicating the receipt and date of receipt of each drug included in the drug code list 
+drugs.patients<-patient.tx %>% select(PATIENT_ID)
 
-PartD.file %>% count(insulin)
+for (i in 1:length(drugs)) {
+  print(sprintf('%d/%d Prescribed Drugs', i, length(drugs)))
+  drugoi <- drugs[[i]]
+  drug.name <- names(drugs)[i]
+  drug.patient <- PartD.file %>% 
+    mutate(
+      temp = PROD_SRVC_ID %in% drugoi,
+      temp.pre = if_else(temp & (SRVC_DT < tx.date), SRVC_DT, ymd(NA_character_)),
+      temp.post = if_else(temp & (SRVC_DT > tx.date), SRVC_DT, ymd(NA_character_)),
+      temp.any = if_else(temp, SRVC_DT, ymd(NA_character_))
+    ) %>% 
+    
+    group_by(PATIENT_ID) %>% 
+    
+    summarise(
+      !!drug.name := first(na.omit(temp.post)),
+      !!sprintf('%s_pre', drug.name) := first(na.omit(temp.pre)),
+      !!sprintf('%s_any', drug.name) := first(na.omit(temp.any)),
+      !!sprintf('%s_pre_count', drug.name) := length((na.omit(temp.pre))),
+      !!sprintf('%s_pre_date_count', drug.name) := length(unique(na.omit(temp.pre))),
+      !!sprintf('%s_any_date_count', drug.name) := length(unique(na.omit(temp.any))),
+      !!sprintf('%s_post_count', drug.name) := length((na.omit(temp.post))),
+      !!sprintf('%s_post_date_count', drug.name) := length(unique(na.omit(temp.post)))
+    )
+  
+  drugs.patients <- drugs.patients %>% left_join(drug.patient, by = 'PATIENT_ID')
+}
+
+
 
 ################################
 # SECTION VI MBSF death
@@ -450,7 +477,7 @@ if ( ! file.exists (fn.RDS) ) {
   for (yeari in 1:length(years)) {
     year  <-  years[yeari]
     print(year)
-        mbsfi  <-   read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year), col_select=c('PATIENT_ID', 'BENE_DEATH_DT', 'VALID_DEATH_DT_SW', 'BENE_PTA_TRMNTN_CD', 'BENE_PTB_TRMNTN_CD', 'BENE_HI_CVRAGE_TOT_MONS', 'BENE_SMI_CVRAGE_TOT_MONS', 'BENE_ENROLLMT_REF_YR', MDCR_STATUS_CODE_01:MDCR_STATUS_CODE_12))
+        mbsfi  <-   read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year), col_select=c('PATIENT_ID', 'BENE_DEATH_DT', 'VALID_DEATH_DT_SW', 'BENE_PTA_TRMNTN_CD', 'BENE_PTB_TRMNTN_CD', 'BENE_HI_CVRAGE_TOT_MONS', 'BENE_SMI_CVRAGE_TOT_MONS', 'BENE_ENROLLMT_REF_YR'))
     # inner join with the SEER patients to reduce size
     mbsfs[[year]]  <-  mbsfi %>% 
       inner_join(lung.SEER.pids) 
@@ -487,6 +514,7 @@ A  <-  patient.tx %>%
 ################################
 
 topography  <-  read_csv(file= './ICDO3topography.csv') %>% rename(site.topography = description) %>% mutate(PRIMARY_SITE = str_remove_all( icdo3_code, fixed(".")))
+
 A  <-  A %>% #Use lung.SEER.first.lc.dx
     filter(YEAR_OF_DIAGNOSIS >=2010) %>%  
     rename ( 
@@ -607,8 +635,26 @@ A  <-  A %>% #Use lung.SEER.first.lc.dx
                                   (size >=7 & size<100) | tnm.t=='4'  ~ 'T4',
                                   T ~ NA_character_),
            dx.date = ymd( ifelse ( nna(YEAR_OF_DIAGNOSIS) & nna(MONTH_OF_DIAGNOSIS) , sprintf('%d%02d15', YEAR_OF_DIAGNOSIS, MONTH_OF_DIAGNOSIS), NA_character_ ) )  ,
-           #death.date = ymd( ifelse ( ""!=(SEER_DATEOFDEATH_YEAR) & ""!=(SEER_DATEOFDEATH_MONTH) , sprintf('%s%s15', SEER_DATEOFDEATH_YEAR, SEER_DATEOFDEATH_MONTH), NA_character_ ) )  
-           ) 
+           #death.date = ymd( ifelse ( ""!=(SEER_DATEOFDEATH_YEAR) & ""!=(SEER_DATEOFDEATH_MONTH) , sprintf('%s%s15', SEER_DATEOFDEATH_YEAR, SEER_DATEOFDEATH_MONTH), NA_character_ ) ),
+           cod.new = case_when(
+             grepl("C", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) & !grepl("C34", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Other Cancer',
+             grepl("C34", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Lung Cancer',
+             grepl("J", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Respiratory Disease',
+             grepl("I", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Circulatory Disease',
+             grepl("A", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) | grepl("B", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Infection_Parasite',
+             grepl("E", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Endocrine Disorder',
+             grepl("F", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Mental Disorder',
+             grepl("G", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Nervous System Disease',
+             grepl("H", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Eye and ear Diseases',
+             grepl("K", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Digestive System Diseases',
+             grepl("M", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Diseases of the musculoskeletal system and connective tissue',
+             grepl("N", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Diseases of the genitourinary system',
+             grepl("V", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) | grepl("W", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) | grepl("X1", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) | grepl("X2", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) | grepl("X3", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) | grepl("X4", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) | grepl("X5", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) | grepl("X9", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) | grepl("Y", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'External Causes of Morbidity Except Suicide',
+             grepl("X6", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) | grepl("X7", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) | grepl("X8", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Suicide',
+             CAUSE_OF_DEATH_ICD_10 == "" ~ 'Alive',
+             CAUSE_OF_DEATH_ICD_10 == '7777' | CAUSE_OF_DEATH_ICD_10 == '7797' ~ 'Unknown',
+             T ~ 'Other'
+           ))
 
     A  <- A %>% mutate( 
                        death.date.seer = 
@@ -630,6 +676,10 @@ A  <- A %>% mutate(
                    Smoking = nna(smoking_pre),
                    Oxygen = nna(o2_pre) )
 
+cause.of.death<-case_when(
+  CAUSE_OF_DEATH_ICD_10 = 
+)
+
 label_list  <-  list(  
                      age = 'Age',  
                      sex = 'Sex',  
@@ -649,8 +699,11 @@ label_list  <-  list(
                      BEHAVIOR_CODE_ICD_O_3 = 'Behavior',
                      death      = 'Death',
                      thirty.day.mortality = '30-day mortality',
-                     ninety.day.mortality = '90-day mortality'
+                     ninety.day.mortality = '90-day mortality',
+                     CAUSE_OF_DEATH_ICD_10 = 'ICD-10 Cause of Death',
+                     cod.new = 'Cause of Death Category'
 )
+
 #A   <-  A.gt2010 %>% select(PATIENT_ID, names(label_list) , dx.date, death.date, seer.surgery ) %>% distinct(PATIENT_ID, .keep_all =T) #this no longer changes anything. However, I kept it because everything downstream references 'A'
 
 
