@@ -643,10 +643,9 @@ A.final %>% count(year(tx.date), tx)
 
 A.final %>% filter (tx =='sbrt') %>% count(year(tx.date))
 
-comorbidities  <-  c('DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal', 'Stroke',  'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis', 'HIV', 'Smoking', 'Oxygen')
 tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
 f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list), 
-                sprintf('%s_any_count', c(names(dx.icd), names(procs), )), 
+                sprintf('%s_any_count', c(names(dx.icd), names(procs) )), 
                 sprintf('%s_pre_count', c(names(dx.icd), names(procs) ) )), collapse = "+") )
 labels(A.final)  <-  label_list
 tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
@@ -664,7 +663,13 @@ count(year(tx.date), tx)
 ################################
 # Testing 
 ################################
+A.final %>% filter ( nna(METS))  %>% pull(PATIENT_ID) %>% head
+A.final %>% filter ( nna(METS), is.na(cancer_nonlung_any)) %>% pull (PATIENT_ID) %>% head
+A.final %>% filter (PATIENT_ID == 'lnK2020w0043216') %>% print(width=Inf)
 
+dx.long %>% filter ( PATIENT_ID == 'lnK2020w0043216' , DX %in% dx.icd[['METS']]$icd9 | DX %in% dx.icd[['METS']]$icd10  ) 
+
+table(nna(A.final$cancer_nonlung_any) , nna(A.final$METS))
 #A.final %>% filter (tx == 'sbrt') %>% sample_n(1) %>% glimpse
 #
 #A.final %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% glimpse

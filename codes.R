@@ -127,8 +127,8 @@ dx.icd   <- list (
         'icd9' = c( expand_range('4550', '4559')     ) ,
         'icd10' =  expand_range('K640', 'K649')     ),
      'optho' = list(
-        'icd9' = c( expand_range('360', '379')     ) ,
-        'icd10' =  expand_range('H00', 'H59')     ),
+        'icd9' = setdiff( expand_range('360', '379'), c( '37601', '37603' )) ,
+        'icd10' =  setdiff( expand_range('H00', 'H59'),   expand_range('H0501', ' H0502')))     ,
      # 'optho2' = list(
      #    'icd9' = c( 
      #            expand_range('362', '36218'),  # Diabetic, hypertensive, and other retinopathy
@@ -277,3 +277,4 @@ for (namei in names(procs)) {
     cat('------------------------------\n\n\n\n')
 } 
 sink()
+
