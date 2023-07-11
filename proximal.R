@@ -12,7 +12,7 @@ source('utilities.R')
 set.seed(3)
 #subset.name <- 'age.gte.80'
 subset.name <- 'all.gte.65'
-filename.in  <-  sprintf('data/A.final3.%s.RDS', subset.name)
+filename.in  <-  sprintf('data/A.final4.%s.RDS', subset.name)
 A.final  <-  readRDS(filename.in)  %>% filter (time.enrolled > 0 ) %>% 
     mutate(treatment.year = year(tx.date),
             death.90.day = if_else ( ninety.day.mortality, death, as.Date(NA_character_)),
@@ -36,10 +36,11 @@ X.numeric  <-  c('age', 'treatment.year', sprintf('%s_pre_count', c(
                     # DMEs
                       'hospital_beds_and_supplies', 'wheelchairs_accessories', 'walking_aids', 'O2accessories', 'other_supplies', 'diabetic_footwear', 'transportation_services', 
                     # Diagnoses
-                       'smoking', 'o2', 'other_bacterial_diseases', 'pneumonia_and_influenza', 'pressure_ulcer', 'ischemic_heart_disease', 'CHF', 'PVD', 'CVD', 'dementia', 'COPD', 'PUD', 'MILDLD', 'DIAB_UC', 'DIAB_C', 'PARA', 'RD', 'cancer_nonlung', 'MSLD', 'METS',  'mental_disorders', 'nervous_system', 'other_heart_disease', 'veins_lymphatics_other_circulatory', 'rheum')
+                       'smoking', 'o2', 'other_bacterial_diseases', 'pneumonia_and_influenza', 'pressure_ulcer', 'ischemic_heart_disease', 'CHF', 'PVD', 'CVD', 'dementia', 'COPD', 'PUD', 'MILDLD', 'DIAB_UC', 'DIAB_C', 'PARA', 'RD', 'cancer_nonlung', 'MSLD', 'METS',  'mental_disorders', 'nervous_system', 'other_heart_disease', 'veins_lymphatics_other_circulatory', 'rheum',
+                    # Drugs
+                    'Insulin', 'Anticoags')
                         )) 
 
-# Not including HIV
 # Get number of non-zero values for each X.numeric variable
 A.final %>% select(all_of(X.numeric)) %>% summarise_all(list(~sum(. > 0, na.rm = T))) %>% t() %>% as.data.frame() %>% arrange(desc(V1))
 
@@ -185,23 +186,23 @@ ggsave(g, width=7, height=5, filename = sprintf('figs/aalen.adjX.%s.pdf', subset
 
 
 
-# Adjusting,b ut using time-varying covariates
-hazard.differences.outcomes.adj  <-  make.odds.ratio.df ( outcome.names.temp) 
-for (outcome.i in 1:length(outcome.names.temp)){ 
-    outcome.name  <-  outcome.names.temp[outcome.i]
-    print(outcome.name)
-    A.temp  <-  A.final %>% mutate( 
-                          outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/ 365,
-                          outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
-        )
-    f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + %s',  paste(sprintf('(%s)', adjust.for.scaled), collapse="+") )
-    m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
-     print(summary(m))
-    hazard.differences.outcomes.adj[outcome.i,1:3]  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
-} 
-hazard.differences.outcomes.adj
-g1.b  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2) 
-ggsave(g1.b, width=7, height=2.5, filename = sprintf('figs/aalen.adjX.time.varying.%s.pdf', subset.name))
+# # Adjusting,b ut using time-varying covariates
+# hazard.differences.outcomes.adj  <-  make.odds.ratio.df ( outcome.names.temp) 
+# for (outcome.i in 1:length(outcome.names.temp)){ 
+#     outcome.name  <-  outcome.names.temp[outcome.i]
+#     print(outcome.name)
+#     A.temp  <-  A.final %>% mutate( 
+#                           outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/ 365,
+#                           outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
+#         )
+#     f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + %s',  paste(sprintf('(%s)', adjust.for.scaled), collapse="+") )
+#     m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
+#      print(summary(m))
+#     hazard.differences.outcomes.adj[outcome.i,1:3]  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
+# } 
+# hazard.differences.outcomes.adj
+# g1.b  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2) 
+# ggsave(g1.b, width=7, height=2.5, filename = sprintf('figs/aalen.adjX.time.varying.%s.pdf', subset.name))
 
 # # Diagnosing the time-varying covariates
 
@@ -221,46 +222,134 @@ ggsave(g1.b, width=7, height=2.5, filename = sprintf('figs/aalen.adjX.time.varyi
 # sum(duplicated(out$no))
 # summary(out)
 
-
 ################################
-# Section III: Poisson Models for negative control outcomes
+# Section IVa: Two-step proximal adjustment with Aalen's additive hazards model for outcomes and negative controls , using other mortality as an egative control
 ################################
+Zs  <-  c('O2accessories_pre_count_z', 'walking_aids_pre_count_z' , 'hospital_beds_and_supplies_pre_count_z' , 'wheelchairs_accessories_pre_count_z' , 'transportation_services_pre_count_z', 'other_supplies_pre_count_z', 'diabetic_footwear_pre_count_z' )
+adjust.for  <-  setdiff( c(X.numeric, X.factor) , Zs) # For now, removing some of the rarer comorbiditis
+adjust.for.scaled  <-  setdiff( c(sprintf('%s_z', X.numeric), X.factor) , Zs) # For now, removing some of the rarer comorbiditis
+#TODO: Figureo ut why some people died but are not of cause specific or other cause
+print("Two-step proximal adjustment with Aalen's additive hazards model for outcomes and negative controls, using other mortality as an egative control")
+# A.final2 %>% select( death, death.cause.specific, death.other.cause, tx.date, tt, diverticular_disease_pre_count) %>% print ( n = 100)
 
-print('Poisson models without and without adjustment')
-# Raw
-odds.ratios.nocs  <-  make.odds.ratio.df ( noc.any.count.names) 
-for (outcome.i in 1:length(noc.any.count.names)){ 
-    outcome.name  <-  noc.any.count.names[outcome.i]
-    print(outcome.name)
-    A.temp  <-  A.final %>% mutate( outcome.count  = !!rlang::sym(outcome.name))
-    f  <-  sprintf( 'outcome.count ~ tx + offset(log(time.enrolled))' )
-    m  <-  glm( f  ,  data = A.temp, family = poisson(link=log))
-    odds.ratios.nocs[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'] , confint(m)['txsbrt',]))
+ f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ (tx) +%s+ %s',  paste(sprintf('(%s)', Zs), collapse="+"), paste(sprintf('(%s)', adjust.for.scaled), collapse="+") )
+ summary(coxph(as.formula(f), data = A.temp))
+
+
+two.step.aalen.othermortality  <-  function(A.final2, Zs,  outcome.name, adjust.for.scaled, W= NA){
+    A.temp  <-  A.final2 %>% mutate( 
+                                          outcome.time  = if_else (nna(!!rlang::sym(W)), as.numeric( !!rlang::sym(W) - tx.date, units = "days" ), tt)/365,
+                                          outcome.bool = ifelse( nna(!!rlang::sym(W)), T, F),
+                                    )
+        # f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + const(treatment.year_z)+  const(Z) ' )
+        # f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ (tx) +  (arthropathy_pre_count)+ (treatment.year_z) ' )
+        # f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ tx + ' )
+         f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) +%s+ %s',  paste(sprintf('const(%s)', Zs), collapse="+"), paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
+        # f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ (tx) +%s+ %s',  paste(sprintf('(%s)', Zs), collapse="+"), paste(sprintf('(%s)', adjust.for.scaled), collapse="+") )
+          # summary(coxph(as.formula(f), data = A.temp))
+        m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0, silent = 0 )
+         # summary(m)
+        mm  <-  model.matrix(as.formula(f), A.temp)[,-1] 
+        coefs  <-  as.matrix(coef( m)[,'Coef.'])
+        negative_outcome_pred  <-  mm %*% coefs
+        A.temp  <-  A.final2 %>% mutate( 
+                              outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+                              outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
+                                negative_outcome_pred = scale(negative_outcome_pred[,1]))
+        f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + const(negative_outcome_pred) +  %s',  paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
+        m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0, silent = 0)
+        #TODO: If you set silent = 0, you'll see some of these are singular, are those biasing the results?
+        boot.res  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')])
+        return(boot.res)
 }
-odds.ratios.nocs 
-rownames(odds.ratios.nocs)  <-  gsub('_any_count', '', rownames(odds.ratios.nocs))
-g2.a  <-  make.OR.plot(odds.ratios.nocs, label_list2) + ggtitle('Raw')
-
-# Adjusting for X
-odds.ratios.nocs.adj  <-  make.odds.ratio.df ( noc.any.count.names) 
-for (outcome.i in 1:length(noc.any.count.names)){ 
-    outcome.name  <-  noc.any.count.names[outcome.i]
-    print(outcome.name)
-    A.temp  <-  A.final %>% mutate( outcome.count  = !!rlang::sym(outcome.name))
-    f  <-  sprintf( 'outcome.count ~ tx + offset(log(time.enrolled))  + %s',  paste(sprintf('%s', adjust.for), collapse="+") )
-    m  <-  glm( f  ,  data = A.temp, family = poisson(link=log))
-    # print(summary(m))
-    odds.ratios.nocs.adj[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'] , confint(m)['txsbrt',]))
+set.seed(3)
+B  <-  1000
+hazard.differences.outcomes.two.step  <-  make.odds.ratio.df ( outcome.names.temp) 
+for (outcome.i in 1:( length(outcome.names.temp))){ 
+    outcome.name  <-  outcome.names.temp[outcome.i]
+    mout  <-  two.step.aalen.othermortality(A.final, Zs,  outcome.name, adjust.for.scaled, 'death.other.cause')
+    est_boot <- parallel::mclapply(1:B, function(bb){
+        A.final2  <-  A.final[sample(nrow(A.final),replace=T ),]
+        mout  <-  two.step.aalen.othermortality(A.final2, Zs,  outcome.name, adjust.for.scaled, 'death.other.cause')
+        return(mout)
+    }, mc.cores =8)
+    est_boot
+    se  <-  sd(unlist(lapply(est_boot, function(x) x[1])))
+   hazard.differences.outcomes.two.step[outcome.i,1:3]  <-  c( mout[1], mout[1] - 1.96*se, mout[1] + 1.96*se )
+   print(hazard.differences.outcomes.two.step[outcome.i,1:3])
 }
-odds.ratios.nocs.adj 
-rownames(odds.ratios.nocs.adj)  <-  gsub('_any.count', '', rownames(odds.ratios.nocs.adj))
-g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list2) + ggtitle('Adjusting for X')
-g2  <- g2.a / g2.b 
-ggsave(g2, width=7, height=5, filename = sprintf('figs/poisson.adjX.%s.pdf', subset.name))
+
+g3.a  <-  make.HD.plot(hazard.differences.outcomes.two.step, label_list2, xlims = c(-0.08, 0.25))
+g  <- (g1.a + ggtitle('No adjustment')) / (g1.b + ggtitle('Adjusting for X'))  / (g3.a  + ggtitle( 'Two stage, DME as Zs, other mortality as W'))
+ggsave(g, width=7, height=7.5, filename = sprintf('figs/aalen.adjX.othermortality.%s.pdf', subset.name))
+ggsave(g3.a, width=7, height=2.5, filename = sprintf('figs/aalen.othermortality.%s.pdf', subset.name))
+
+
+# Using only a single Z
+#################################
+## Section IVa: Two-step proximal adjustment with Aalen's additive hazards model for outcomes and negative controls , using other mortality as an egative control
+#################################
+##TODO: Figureo ut why some people died but are not of cause specific or other cause
+#print("Two-step proximal adjustment with Aalen's additive hazards model for outcomes and negative controls, using other mortality as an egative control")
+#A.final2 %>% select( death, death.cause.specific, death.other.cause, tx.date, tt, diverticular_disease_pre_count) %>% print ( n = 100)
+#two.step.aalen.othermortality  <-  function(A.final2, Z,  outcome.name, adjust.for.scaled, W= NA){
+#    Z  <-  'diverticular_disease_pre_count'
+#    A.temp  <-  A.final2 %>% mutate( 
+#                                        outcome.bool = nna(death), 
+#                                        # Z = scale(!!rlang::sym(Z)) 
+#                                        outcome.time = tt/365,
+#                                        outcome.time.2  = if_else (nna(death), as.numeric( death - tx.date, units = "days" ), tt)/365,
+#                              outcome.bool.2 = ifelse( nna(death), T, F),
+#                                          Z = !!rlang::sym(Z) 
+#                                          # Z = age_z 
+#                                    )
+#        f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + const(treatment.year_z)+  const(Z) ' )
+#        f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ (tx) +  (arthropathy_pre_count)+ (treatment.year_z) ' )
+#        f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ tx + ' )
+#        summary(coxph(as.formula(f), data = A.temp))
+#        m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 1, silent = 0 )
+#        summary(m)
+#        print(coef(m)['const(Z)', c('Coef.', 'lower2.5%', 'upper97.5%')])
+#        mm  <-  model.matrix(as.formula(f), A.temp)[,-1] 
+#        coefs  <-  as.matrix(coef( m)[,'Coef.'])
+#        negative_outcome_pred  <-  mm %*% coefs
+#        A.temp  <-  A.final2 %>% mutate( 
+#                              outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+#                              outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
+#                                negative_outcome_pred = scale(negative_outcome_pred[,1]))
+#        f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + const(negative_outcome_pred) +  %s',  paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
+#        m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0, silent = 0)
+#        #TODO: If you set silent = 0, you'll see some of these are singular, are those biasing the results?
+#        boot.res  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')])
+#        print(boot.res)
+#        boot.res
+#}
+
+#set.seed(3)
+#Z  <-  'optho_pre_count'
+#B  <-  1000
+#hazard.differences.outcomes.two.step  <-  make.odds.ratio.df ( outcome.names.temp) 
+#for (outcome.i in 1:( length(outcome.names.temp) - 1)){ 
+#    outcome.name  <-  outcome.names.temp[outcome.i]
+#    mout  <-  two.step.aalen.othermortality(A.final, Z,  outcome.name, adjust.for.scaled)
+#    est_boot <- parallel::mclapply(1:B, function(bb){
+#        A.final2  <-  A.final[sample(nrow(A.final),replace=T ),]
+#        boot.res  <-  two.step.aalen.othermortality(A.final2, Z,  outcome.name, adjust.for.scaled)
+#        return(boot.res)
+#    }, mc.cores =1)
+#    est_boot
+#    se  <-  sd(unlist(lapply(est_boot, function(x) x[1])))
+#   hazard.differences.outcomes.two.step[outcome.i,1:3]  <-  c( mout[1], mout[1] - 1.96*se, mout[1] + 1.96*se )
+#   print(hazard.differences.outcomes.two.step[outcome.i,1:3])
+#}
+#g3.a  <-  make.HD.plot(hazard.differences.outcomes.two.step[-nrow(hazard.differences.outcomes.two.step),], label_list2, xlims = c(-0.08, 0.25))
+#ggsave(g3.a, width=7, height=2.5, filename = sprintf('figs/aalen.othermortality.%s.pdf', subset.name))
+
+
 
 
 ################################
-# Section IV: Two-step proximal adjustment with Aalen's additive hazards model for outcomes and negative controls 
+# Section IVb: Two-step proximal adjustment with Aalen's additive hazards model for outcomes and negative controls 
 ################################
 print("Two-step proximal adjustment with Aalen's additive hazards model for outcomes and negative controls")
 
@@ -276,6 +365,7 @@ two.step.aalen.sumW  <-  function(A.final2, Z, noc.names.temp, outcome.name, adj
         }
         f  <-  sprintf( 'W ~ tx + %s + %s', Z,  paste(sprintf('%s', adjust.for.scaled), collapse="+") )
         stage1  <- glm( as.formula(f) , family = poisson(link='log'), data = A.temp)
+        summary(stage1)
         negative_outcome_pred  <-  predict(stage1, type = 'link')
         A.temp  <-  A.final2 %>% mutate( 
                               outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
@@ -292,7 +382,7 @@ B  <-  1000
 hazard.differences.outcomes.two.step  <-  make.odds.ratio.df ( outcome.names.temp) 
 for (outcome.i in 1:( length(outcome.names.temp) - 1)){ 
     outcome.name  <-  outcome.names.temp[outcome.i]
-    noc.names.temp  <- setdiff( noc.pre.count.names, c(Z, sprintf('%s_pre_count', outcome.name)))
+    noc.names.temp  <- setdiff( noc.any.count.names, c(Z, sprintf('%s_any_count', outcome.name)))
     print(outcome.name)
     mout  <-  two.step.aalen.sumW(A.final, Z, noc.names.temp, outcome.name, adjust.for.scaled)
     est_boot <- parallel::mclapply(1:B, function(bb){
@@ -306,7 +396,60 @@ for (outcome.i in 1:( length(outcome.names.temp) - 1)){
    print(hazard.differences.outcomes.two.step[outcome.i,1:3])
 }
 g3.a  <-  make.HD.plot(hazard.differences.outcomes.two.step[-nrow(hazard.differences.outcomes.two.step),], label_list2, xlims = c(-0.08, 0.25))
-ggsave(g3.a, width=7, height=2.5, filename = sprintf('figs/aalen.sumW.%s.pdf', subset.name))
+ggsave(g3.a, width=7, height=2.5, filename = sprintf('figs/aalen.sumanyW.%s.pdf', subset.name))
+
+
+
+################################
+# Section IVc: Two-step proximal adjustment with Aalen's additive hazards model for outcomes and negative controls , multiple Zs
+################################
+print("Two-step proximal adjustment with Aalen's additive hazards model for outcomes and negative controls, multiple Zs")
+
+two.step.aalen.sumW  <-  function(A.final2, Z, noc.names.temp, outcome.name, adjust.for.scaled, W= NA){
+        A.temp  <-  A.final2 %>% mutate( 
+                              outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+                              outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
+        )
+        if (is.na(W)) {
+            A.temp <- A.temp %>% mutate( W = rowSums( ( across( all_of(noc.names.temp)))) )
+        }else{
+            A.temp <- A.temp %>% mutate( W = !!rlang::sym(W) )
+        }
+        f  <-  sprintf( 'W ~ tx + %s', paste(sprintf('%s', c( Z, adjust.for.scaled)), collapse="+") )
+        stage1  <- glm( as.formula(f) , family = poisson(link='log'), data = A.temp)
+        negative_outcome_pred  <-  predict(stage1, type = 'link')
+        A.temp  <-  A.final2 %>% mutate( 
+                              outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+                              outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
+                                negative_outcome_pred = negative_outcome_pred)
+        f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + const(negative_outcome_pred) +  %s',  paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
+        m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
+        boot.res  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')])
+}
+
+set.seed(3)
+Z  <-  c( 'optho_pre_count', 'diverticular_disease_pre_count', 'arthropathy_pre_count' )
+B  <-  1000
+outcome.names.temp.2  <-  setdiff( outcome.names.temp, Z)
+hazard.differences.outcomes.two.step  <-  make.odds.ratio.df ( outcome.names.temp.2) 
+for (outcome.i in 1:( length(outcome.names.temp.2))){ 
+    outcome.name  <-  outcome.names.temp.2[outcome.i]
+    noc.names.temp  <- setdiff( noc.pre.count.names, c(Z, sprintf('%s_any_count', outcome.name)))
+    print(outcome.name)
+    mout  <-  two.step.aalen.sumW(A.final, Z, noc.names.temp, outcome.name, adjust.for.scaled)
+    est_boot <- parallel::mclapply(1:B, function(bb){
+        A.final2  <-  A.final[sample(nrow(A.final),replace=T ),]
+        boot.res  <-  two.step.aalen.sumW(A.final2, Z, noc.names.temp, outcome.name, adjust.for.scaled)
+        return(boot.res)
+    }, mc.cores =8)
+    est_boot
+    se  <-  sd(unlist(lapply(est_boot, function(x) x[1])))
+   hazard.differences.outcomes.two.step[outcome.i,1:3]  <-  c( mout[1], mout[1] - 1.96*se, mout[1] + 1.96*se )
+   print(hazard.differences.outcomes.two.step[outcome.i,1:3])
+}
+g3.a  <-  make.HD.plot(hazard.differences.outcomes.two.step[-nrow(hazard.differences.outcomes.two.step),], label_list2, xlims = c(-0.08, 0.25))
+ggsave(g3.a, width=7, height=2.5, filename = sprintf('figs/aalen.sumanyW.Zoptho.divertic.arthropathy.%s.pdf', subset.name))
+
 
 
 # Choose the W to be the one with most correlation with A and Z, as it is thus
@@ -415,6 +558,42 @@ ggsave(g3.a, width=7, height=2.5, filename = sprintf('figs/aalen.sumW.%s.pdf', s
 # }
 # g3.a  <-  make.HD.plot(hazard.differences.outcomes.two.step[-nrow(hazard.differences.outcomes.two.step),], label_list2, xlims = c(-0.08, 0.25))
 # ggsave(g3.a, width=7, height=2.5, filename = sprintf('figs/aalen.sumW.Xonlytxyear.%s.pdf', subset.name))
+
+################################
+# Section IV: Poisson Models for negative control outcomes
+################################
+
+print('Poisson models without and without adjustment')
+# Raw
+odds.ratios.nocs  <-  make.odds.ratio.df ( noc.any.count.names) 
+for (outcome.i in 1:length(noc.any.count.names)){ 
+    outcome.name  <-  noc.any.count.names[outcome.i]
+    print(outcome.name)
+    A.temp  <-  A.final %>% mutate( outcome.count  = !!rlang::sym(outcome.name))
+    f  <-  sprintf( 'outcome.count ~ tx + offset(log(time.enrolled))' )
+    m  <-  glm( f  ,  data = A.temp, family = poisson(link=log))
+    odds.ratios.nocs[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'] , confint(m)['txsbrt',]))
+}
+odds.ratios.nocs 
+rownames(odds.ratios.nocs)  <-  gsub('_any_count', '', rownames(odds.ratios.nocs))
+g2.a  <-  make.OR.plot(odds.ratios.nocs, label_list2) + ggtitle('Raw')
+
+# Adjusting for X
+odds.ratios.nocs.adj  <-  make.odds.ratio.df ( noc.any.count.names) 
+for (outcome.i in 1:length(noc.any.count.names)){ 
+    outcome.name  <-  noc.any.count.names[outcome.i]
+    print(outcome.name)
+    A.temp  <-  A.final %>% mutate( outcome.count  = !!rlang::sym(outcome.name))
+    f  <-  sprintf( 'outcome.count ~ tx + offset(log(time.enrolled))  + %s',  paste(sprintf('%s', adjust.for), collapse="+") )
+    m  <-  glm( f  ,  data = A.temp, family = poisson(link=log))
+    # print(summary(m))
+    odds.ratios.nocs.adj[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'] , confint(m)['txsbrt',]))
+}
+odds.ratios.nocs.adj 
+rownames(odds.ratios.nocs.adj)  <-  gsub('_any.count', '', rownames(odds.ratios.nocs.adj))
+g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list2) + ggtitle('Adjusting for X')
+g2  <- g2.a / g2.b 
+ggsave(g2, width=7, height=5, filename = sprintf('figs/poisson.adjX.%s.pdf', subset.name))
 
 
 ################################
