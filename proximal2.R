@@ -18,6 +18,7 @@ set.seed(3)
 subset.name <- 'all.gte.65'
 filename.in  <-  sprintf('data/A.final4.%s.RDS', subset.name)
 A.final  <-  readRDS(filename.in)  %>% filter (time.enrolled > 0 ) %>% 
+    filter (year(tx.date) > 2010 & year(tx.date) < 2019) %>%
     mutate(treatment.year = year(tx.date),
             death.90.day = if_else ( ninety.day.mortality, death, as.Date(NA_character_)),
             death.cause.specific = if_else ( cause.specific.mortality == 'Death', death, as.Date(NA_character_)),
@@ -45,6 +46,7 @@ comorbidities  <-  c( 'DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI',
 #                        'smoking', 'o2',  'ischemic_heart_disease', 'CHF', 'dementia', 'COPD', 'DIAB_C', 'cancer_nonlung', 'MSLD', 'METS')
 #                         )) 
 
+ table( A.final$histology, useNA="ifany")
 # Get number of non-zero values for each X.numeric variable
  A.final %>% select(all_of(X.numeric)) %>% summarise_all(list(~sum(. > 0, na.rm = T))) %>% t() %>% as.data.frame() %>% arrange(desc(V1))
 
