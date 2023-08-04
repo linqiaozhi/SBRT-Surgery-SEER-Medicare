@@ -8,6 +8,7 @@ library(haven)
 library(icd)#devtools::install_github("jackwasey/icd")
 source('utilities.R')
 source('codes.R')
+source('DrugCodes.R')
 source('file.paths.R')
 
 ################################
@@ -422,7 +423,7 @@ fn.RDS  <- sprintf("%s/PartD.RDS", rds.path)
   for (yeari in 1:length(years)) {
     year  <-  years[yeari]
     print(year)
-    PartD.filei  <-   read_dta(sprintf('%s/Part D files/pdesaf%s.dta', data.path, year) , 
+    PartD.filei  <-   read_dta(sprintf('%s/pdesaf%s.dta', data.path, year) , 
                                col_select=c('PATIENT_ID', 'SRVC_DT',  'PROD_SRVC_ID'))
     PartD.files[[year]]  <-  PartD.filei %>% inner_join(lung.SEER.pids)
   }
@@ -433,35 +434,31 @@ fn.RDS  <- sprintf("%s/PartD.RDS", rds.path)
 }
 
 
-#Create variables indicating the receipt and date of receipt of each drug included in the drug code list 
-drugs.patients<-patient.tx %>% select(PATIENT_ID)
+PartD.file.txdate  <-  PartD.file  %>% 
+    right_join(patient.tx %>% select( PATIENT_ID, tx.date)) %>% 
+    mutate(SRVC_DT = ymd(SRVC_DT))
 
+#Create variables indicating the receipt and date of receipt of each drug included in the drug code list 
+patient.drugs<-patient.tx %>% select(PATIENT_ID)
 for (i in 1:length(drugs)) {
   print(sprintf('%d/%d Prescribed Drugs', i, length(drugs)))
   drugoi <- drugs[[i]]
   drug.name <- names(drugs)[i]
-  drug.patient <- PartD.file %>% 
+  drug <- PartD.file.txdate %>% 
     mutate(
       temp = PROD_SRVC_ID %in% drugoi,
       temp.pre = if_else(temp & (SRVC_DT < tx.date), SRVC_DT, ymd(NA_character_)),
       temp.post = if_else(temp & (SRVC_DT > tx.date), SRVC_DT, ymd(NA_character_)),
       temp.any = if_else(temp, SRVC_DT, ymd(NA_character_))
     ) %>% 
-    
     group_by(PATIENT_ID) %>% 
-    
     summarise(
       !!drug.name := first(na.omit(temp.post)),
-      !!sprintf('%s_pre', drug.name) := first(na.omit(temp.pre)),
-      !!sprintf('%s_any', drug.name) := first(na.omit(temp.any)),
       !!sprintf('%s_pre_count', drug.name) := length((na.omit(temp.pre))),
-      !!sprintf('%s_pre_date_count', drug.name) := length(unique(na.omit(temp.pre))),
-      !!sprintf('%s_any_date_count', drug.name) := length(unique(na.omit(temp.any))),
+      !!sprintf('%s_any_count', drug.name ) := length((na.omit(temp.any))),
       !!sprintf('%s_post_count', drug.name) := length((na.omit(temp.post))),
-      !!sprintf('%s_post_date_count', drug.name) := length(unique(na.omit(temp.post)))
     )
-  
-  drugs.patients <- drugs.patients %>% left_join(drug.patient, by = 'PATIENT_ID')
+  patient.drugs <- patient.drugs %>% left_join(drug, by = 'PATIENT_ID')
 }
 
 
@@ -506,7 +503,9 @@ A  <-  patient.tx %>%
     left_join( patient.dx, by = 'PATIENT_ID') %>% 
     left_join( patient.outpatient.procs, by = 'PATIENT_ID',) %>% 
     left_join( patient.mbsf, by = 'PATIENT_ID') %>%
-    left_join( patient.seer, by = 'PATIENT_ID')
+    left_join( patient.seer, by = 'PATIENT_ID') %>% 
+    left_join( patient.drugs, by = 'PATIENT_ID')  
+
 
 
 ################################
@@ -676,9 +675,9 @@ A  <- A %>% mutate(
                    Smoking = nna(smoking_pre),
                    Oxygen = nna(o2_pre) )
 
-cause.of.death<-case_when(
-  CAUSE_OF_DEATH_ICD_10 = 
-)
+# cause.of.death<-case_when(
+#   CAUSE_OF_DEATH_ICD_10 = 
+# )
 
 label_list  <-  list(  
                      age = 'Age',  
@@ -700,11 +699,11 @@ label_list  <-  list(
                      death      = 'Death',
                      thirty.day.mortality = '30-day mortality',
                      ninety.day.mortality = '90-day mortality',
-                     CAUSE_OF_DEATH_ICD_10 = 'ICD-10 Cause of Death',
                      cod.new = 'Cause of Death Category'
 )
 
 #A   <-  A.gt2010 %>% select(PATIENT_ID, names(label_list) , dx.date, death.date, seer.surgery ) %>% distinct(PATIENT_ID, .keep_all =T) #this no longer changes anything. However, I kept it because everything downstream references 'A'
+
 
 
 ################################
@@ -731,16 +730,18 @@ A.final %>% filter (tx =='sbrt') %>% count(year(tx.date))
 
 tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
 f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list), 
-                sprintf('%s_any_count', c(names(dx.icd), names(procs) )), 
-                sprintf('%s_pre_count', c(names(dx.icd), names(procs) ) )), collapse = "+") )
+                sprintf('%s_any_count', c(names(dx.icd), names(procs), names(drugs) )), 
+                sprintf('%s_pre_count', c(names(dx.icd), names(procs), names(drugs) ) )) , collapse = "+") )
 labels(A.final)  <-  label_list
 tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
 summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars3.htm')
 
-filename.out  <-  'data/A.final3.all.gte.65.RDS' 
-A.final %>% select ( PATIENT_ID:death.date.mbsf, names(label_list), tt, time.enrolled) %>%  write_rds( filename.out)
+filename.out  <-  'data/A.final4.all.gte.65.RDS' 
+A.final %>% select ( PATIENT_ID:death.date.mbsf, names(label_list), tt, time.enrolled, Insulin:Anticoags_post_count) %>%  write_rds( filename.out)
 write_rds( label_list,'data/label.list.RDS')
 
+table(A.final$DIAB_C_any_count >0, A.final$Insulin_any_date_count >0)
+summary(A.final$Insulin_any_date_count)
 A.final %>% group_by(tx) %>% summarise( m = mean((tt)))
 
 A.final %>% group_by(year(tx.date)) %>% summarise ( mean( tx == 'sbrt')) 
@@ -762,3 +763,8 @@ table(nna(A.final$cancer_nonlung_any) , nna(A.final$METS))
 #outpat.outpat.revenue %>% filter (PATIENT_ID == 'lnK2020y2293566' & HCPCS_CD %in% sbrt.cpts) %>% glimpse
 #outpat %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% mutate(ex = explain_code(as.icd9(PRNCPAL_DGNS_CD),condense=F)) %>% select (CLM_THRU_DT, ex) %>% print(n=Inf)
 #carrier %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% mutate(ex = explain_code(as.icd9(LINE_ICD_DGNS_CD),condense=F)) %>% select (CLM_THRU_DT, ex) %>% print(n=Inf)
+
+
+
+A.final %>% filter( other.cause.mortality == 'Death') %>% count(cod.new)
+A.final %>% filter( cause.specific.mortality == 'Death') %>% count(cod.new)
