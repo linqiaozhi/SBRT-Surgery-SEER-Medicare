@@ -467,6 +467,9 @@ for (i in 1:length(drugs)) {
 # SECTION VI MBSF death
 ################################
 
+fofo  <- read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year))
+
+
 fn.RDS  <- sprintf("%s/MBSF.RDS", rds.path)
 if ( ! file.exists (fn.RDS) ) {
   mbsfs  <-  list()
@@ -474,7 +477,7 @@ if ( ! file.exists (fn.RDS) ) {
   for (yeari in 1:length(years)) {
     year  <-  years[yeari]
     print(year)
-        mbsfi  <-   read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year), col_select=c('PATIENT_ID', 'BENE_DEATH_DT', 'VALID_DEATH_DT_SW', 'BENE_PTA_TRMNTN_CD', 'BENE_PTB_TRMNTN_CD', 'BENE_HI_CVRAGE_TOT_MONS', 'BENE_SMI_CVRAGE_TOT_MONS', 'BENE_ENROLLMT_REF_YR'))
+        mbsfi  <-   read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year), col_select=c('PATIENT_ID', 'BENE_DEATH_DT', 'VALID_DEATH_DT_SW', 'BENE_PTA_TRMNTN_CD', 'BENE_PTB_TRMNTN_CD', sprintf('MDCR_STATUS_CODE_%02d', 1:12), 'BENE_HI_CVRAGE_TOT_MONS', 'BENE_SMI_CVRAGE_TOT_MONS', 'BENE_ENROLLMT_REF_YR'))
     # inner join with the SEER patients to reduce size
     mbsfs[[year]]  <-  mbsfi %>% 
       inner_join(lung.SEER.pids) 
@@ -485,14 +488,28 @@ if ( ! file.exists (fn.RDS) ) {
   mbsf  <-  readRDS(fn.RDS)
 }
 
-patient.mbsf <- mbsf %>% mutate( 
-                        death.date.mbsf = ifelse(mbsf$BENE_DEATH_DT!= "", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd )
 
-# If MBSF is used for any other purpose, need to be more savvy with this step
-patient.mbsf  <-  patient.mbsf %>% 
-    filter (nna(death.date.mbsf)) %>% 
-    group_by( PATIENT_ID) %>% 
-    summarise( death.date.mbsf = first(death.date.mbsf))
+
+
+# Need to get the number of months pre-tx during which the patient was enrolled. 
+# One record per patient per month enrolled
+# https://resdac.org/cms-data/variables/medicare-status-code-january
+mbsf.long  <- mbsf  %>% select( PATIENT_ID,BENE_ENROLLMT_REF_YR,  MDCR_STATUS_CODE_01:MDCR_STATUS_CODE_12) %>% pivot_longer(MDCR_STATUS_CODE_01:MDCR_STATUS_CODE_12, names_to= 'month') %>%
+    filter(value != '00') %>% 
+    mutate(year = BENE_ENROLLMT_REF_YR,
+           month = str_sub(month, -2),
+           date = ceiling_date(ymd(sprintf('%d-%s-01', year, month)), 'month') - days(1))
+mbsf.long  <-  mbsf.long %>% right_join(patient.tx %>% select( PATIENT_ID, tx.date))
+mbsf.pre.tx.months <- mbsf.long %>% group_by(PATIENT_ID) %>% summarise( pre.tx.months = sum( (date < tx.date)) )
+
+patient.mbsf <- mbsf %>% mutate( 
+                        death.date.mbsf.temp = ifelse(mbsf$BENE_DEATH_DT!= "", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd ) %>% 
+                        group_by( PATIENT_ID) %>% 
+                        summarise( 
+                                  death.date.mbsf = first(na.omit(death.date.mbsf.temp))
+                            ) %>%
+                        right_join(mbsf.pre.tx.months)
+
 
 
 ################################
@@ -505,6 +522,7 @@ A  <-  patient.tx %>%
     left_join( patient.mbsf, by = 'PATIENT_ID') %>%
     left_join( patient.seer, by = 'PATIENT_ID') %>% 
     left_join( patient.drugs, by = 'PATIENT_ID')  
+
 
 
 
@@ -724,8 +742,9 @@ A.final <- A.final %>% filter(
 A.final %>% count(tx)
 A.final  <- A.final %>% filter ((valid.pet.scan & tx=='sbrt') | tx=='sublobar' ) 
 A.final %>% count(tx)
+A.final  <-  A.final %>% filter(pre.tx.months >= 12 ) 
+A.final %>% count(tx)
 A.final %>% count(year(tx.date), tx)
-
 A.final %>% filter (tx =='sbrt') %>% count(year(tx.date))
 
 tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
@@ -734,10 +753,10 @@ f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list),
                 sprintf('%s_pre_count', c(names(dx.icd), names(procs), names(drugs) ) )) , collapse = "+") )
 labels(A.final)  <-  label_list
 tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
-summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars3.htm')
+summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars4.htm')
 
-filename.out  <-  'data/A.final4.all.gte.65.RDS' 
-A.final %>% select ( PATIENT_ID:death.date.mbsf, names(label_list), tt, time.enrolled, Insulin:Anticoags_post_count) %>%  write_rds( filename.out)
+filename.out  <-  'data/A.final5.all.gte.65.RDS' 
+A.final %>% select ( PATIENT_ID:death.date.mbsf, names(label_list),  Insulin:Anticoags_post_count, tt,pre.tx.months, time.enrolled) %>%  write_rds( filename.out)
 write_rds( label_list,'data/label.list.RDS')
 
 table(A.final$DIAB_C_any_count >0, A.final$Insulin_any_date_count >0)
