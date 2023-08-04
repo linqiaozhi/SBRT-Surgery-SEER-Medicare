@@ -51,8 +51,9 @@ get.dates.of.dx  <-  function( A, proc.codes ) {
 
 
 make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
-    xlims <- c(0.5, 4)
+    xlims <- c(0.3, 3)
     tt  <-  ifelse (hazard, 'Hazard Ratio (log scale)', 'Hazard Ratio (log scale)')
+    row.names(odds.ratios_) <- gsub("_pre_count", "", row.names(odds.ratios_))
     g <- ggplot(odds.ratios_, aes(x = estimate, y=y_axis)) + 
         geom_vline(aes(xintercept = 1), size = 0.25, linetype = "dashed") +
         geom_errorbarh(aes( xmax = high_ci, xmin = low_ci), size = 0.20, height = 0.3)+
@@ -77,7 +78,7 @@ make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
  g
 }
 
-make.HD.plot  <-  function (odds.ratios_, label_list2, hazard =F, xlims = c(-0.05,0.25)) {
+make.HD.plot  <-  function (odds.ratios_, label_list2, hazard =F, xlims = c(-0.1,0.15)) {
     tt  <-  'Hazard Difference'
     g <- ggplot(odds.ratios_, aes(x = estimate, y=y_axis)) + 
         geom_vline(aes(xintercept = 0), size = 0.25, linetype = "dashed") +
