@@ -16,16 +16,26 @@ set.seed(3)
 ################################
 #subset.name <- 'age.gte.80'
 subset.name <- 'all.gte.65'
-filename.in  <-  sprintf('data/A.final4.%s.RDS', subset.name)
+analysis.name  <-  'all.surgery'
+analysis.name  <-  'gt80.surgery'
+# filename.in  <-  sprintf('data/A.final5.%s.RDS', subset.name)
+ filename.in  <-  sprintf('data/A.final6.%s.RDS', subset.name)
 A.final  <-  readRDS(filename.in)  %>% filter (time.enrolled > 0 ) %>% 
     filter (year(tx.date) > 2010 & year(tx.date) < 2019) %>%
+    filter(age >= 80) %>%
+    # filter ( tx %in% c('sbrt', 'sublobar') ) %>%
+    mutate(tx = factor(case_when( tx == 'sbrt' ~ 'sbrt', tx == 'sublobar' | tx == 'lobar' ~ 'surgery'), levels = c('surgery', 'sbrt'))) %>%
     mutate(treatment.year = year(tx.date),
             death.90.day = if_else ( ninety.day.mortality, death, as.Date(NA_character_)),
             death.cause.specific = if_else ( cause.specific.mortality == 'Death', death, as.Date(NA_character_)),
             death.cause.specific = if_else ( cause.specific.mortality == 'Death', death, as.Date(NA_character_)),
             death.other.cause = if_else ( other.cause.mortality == 'Death', death, as.Date(NA_character_)),
-    
+            pre.tx.days = pre.tx.months * 30.5,
     )
+A.final$tx  <-  droplevels(A.final$tx)
+    table( A.final$tx, useNA="ifany")
+
+table( A.final$age, useNA="ifany")
 
 label_list  <-  readRDS('data/label.list.RDS')
 comorbidities  <-  c( 'DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal',   'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis', 't_stage_8')
@@ -57,7 +67,7 @@ A.final  <- A.final %>% mutate(
     across( all_of(X.numeric), scale_ , .names = "{.col}_z" )
 )
 
-negative.outcomes.oi  <-  c( 'fall',  'other_injury', 'diverticular_disease', 'hernia',  'arthropathy','GU_sx', 'optho' )
+negative.outcomes.oi  <-  c( 'fall',  'other_injury', 'diverticular_disease', 'hernia',  'arthropathy','GU_sx', 'optho2' )
 outcome.names  <-  c( 'death', 'death.cause.specific', 'death.90.day', 'death.other.cause' )
 noc.any.count.names = sprintf( '%s_any_count', negative.outcomes.oi )
 noc.post.count.names = sprintf( '%s_post_count', negative.outcomes.oi )
@@ -79,7 +89,7 @@ label_list2  <-  c( label_list,
                    diverticular_disease = '*Diverticular disease*',
                    hemorrhoids = '*Hemorrhoids*',
                    pancreatic = '*Pancreatic*',
-                   optho = '*Ophthalmic*',
+                   optho2 = '*Ophthalmic*',
                    oral = '*Oral*'
 )
 Zs  <-  c('O2accessories_pre_count_z', 'walking_aids_pre_count_z' , 'hospital_beds_and_supplies_pre_count_z' , 'wheelchairs_accessories_pre_count_z' , 'transportation_services_pre_count_z', 'other_supplies_pre_count_z', 'diabetic_footwear_pre_count_z' )
@@ -91,6 +101,15 @@ adjust.for.scaled  <-  setdiff( c(sprintf('%s_z', X.numeric.min), X.factor.min) 
 # adjust.for.scaled  <-  setdiff( c(sprintf('%s_z', X.numeric), X.factor) , c()) 
 B  <-  1000
 for (i in 1:length(adjust.for.scaled)) cat(i, adjust.for.scaled[i], '\n')
+
+
+# If using pre-counts, use pre.tx.days as the offset. If using post-counts, use time.enrolled. If using all counts, use pre.tx.days + time.enrolled
+A.final <- A.final %>% mutate(
+                              time.offset = pre.tx.days
+                               # time.offset = pre.tx.days + time.enrolled
+                              )
+noc.count.names  <-  noc.pre.count.names
+# noc.count.names  <-  noc.any.count.names
 
 ################################
 # Proximal  function 
@@ -129,7 +148,7 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, adjust.for.sc
     # Poisson for count Ys
     if (Y.count) {
         A.temp  <- A.temp %>% mutate( Y.count  = !!rlang::sym(outcome.name),)
-        f  <-  sprintf( 'Y.count ~ tx + offset(log(time.enrolled))  + %s+ What1 + What2',  
+        f  <-  sprintf( 'Y.count ~ tx + offset(log(time.offset))  + %s+ What1 + What2',  
         # f  <-  sprintf( 'Y.count ~ tx + offset(log(time.enrolled))  + %s',  
                        paste(sprintf('%s', adjust.for.scaled), collapse="+") )
         m  <-  glm( f  ,  data = A.temp, family = poisson(link=log))
@@ -173,10 +192,10 @@ for (outcome.i in 1:length(outcome.names)){
     m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
     hazard.differences.outcomes.adj[outcome.i,1:3]  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
     # Proximal
-    mout  <-  two.step(A.final, Zs,  outcome.name, noc.pre.count.names, adjust.for.scaled)
+    mout  <-  two.step(A.final, Zs,  outcome.name, noc.count.names, adjust.for.scaled)
     est_boot <- parallel::mclapply(1:B, function(bb){
         A.final2  <-  A.final[sample(nrow(A.final),replace=T ),]
-        mout  <-  two.step(A.final2, Zs,  outcome.name, noc.pre.count.names, adjust.for.scaled)
+        mout  <-  two.step(A.final2, Zs,  outcome.name, noc.count.names, adjust.for.scaled)
         return(mout)
     }, mc.cores =8)
     se  <-  sd(unlist(lapply(est_boot, function(x) x[1])))
@@ -188,23 +207,23 @@ for (outcome.i in 1:length(outcome.names)){
 #  Counts
 ################################
 
-odds.ratios.nocs  <-  make.odds.ratio.df ( noc.pre.count.names) 
-odds.ratios.nocs.adj  <-  make.odds.ratio.df ( noc.pre.count.names) 
-odds.ratios.nocs.proximal  <-  make.odds.ratio.df ( noc.pre.count.names) 
-for (outcome.i in 1:length(noc.pre.count.names)){ 
-    outcome.name  <-  noc.pre.count.names[outcome.i]
+odds.ratios.nocs  <-  make.odds.ratio.df ( noc.count.names) 
+odds.ratios.nocs.adj  <-  make.odds.ratio.df ( noc.count.names) 
+odds.ratios.nocs.proximal  <-  make.odds.ratio.df ( noc.count.names) 
+for (outcome.i in 1:length(noc.count.names)){ 
+    outcome.name  <-  noc.count.names[outcome.i]
     print(outcome.name)
     A.temp  <-  A.final %>% mutate( outcome.count  = !!rlang::sym(outcome.name))
     # Raw
-    f  <-  sprintf( 'outcome.count ~ tx + offset(log(time.enrolled))' )
+    f  <-  sprintf( 'outcome.count ~ tx + offset(log(time.offset))' )
     m  <-  glm( f  ,  data = A.temp, family = poisson(link=log))
     odds.ratios.nocs[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'] , confint(m)['txsbrt',]))
     # Adjust for X
-    f  <-  sprintf( 'outcome.count ~ tx + offset(log(time.enrolled))  + %s',  paste(sprintf('%s', adjust.for.scaled), collapse="+") )
+    f  <-  sprintf( 'outcome.count ~ tx + offset(log(time.offset))  + %s',  paste(sprintf('%s', adjust.for.scaled), collapse="+") )
     m  <-  glm( f  ,  data = A.temp, family = poisson(link=log))
     odds.ratios.nocs.adj[outcome.i,1:3]  <-  exp(c( coef(m)['txsbrt'] , confint(m)['txsbrt',]))
     # Proximal
-    noc.names.temp  <- setdiff( noc.pre.count.names, c(outcome.name))
+    noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
     mout  <-  two.step(A.final, Zs,  outcome.name, noc.names.temp, adjust.for.scaled,Y.count =T, verbose=F)
     est_boot <- parallel::mclapply(1:B, function(bb){
         A.final2  <-  A.final[sample(nrow(A.final),replace=T ),]
@@ -226,38 +245,42 @@ for (outcome.i in 1:length(noc.pre.count.names)){
 g1.a  <-  make.HD.plot(hazard.differences.outcomes, label_list2)
 g1.b  <-  make.OR.plot(odds.ratios.nocs, label_list2)
 g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,2))) + plot_annotation(title="Raw")
-ggsave(g1, width=7, height=3, filename = sprintf('figs/raw.pdf'))
+ggsave(g1, width=7, height=3, filename = sprintf('figs/%s.raw.pdf', analysis.name))
 g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2)
 g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list2)
 g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,2)))+ plot_annotation(title="Adj")
-ggsave(g2, width=7, height=3, filename = sprintf('figs/adj.pdf'))
+ggsave(g2, width=7, height=3, filename = sprintf('figs/%s.adj.pdf', analysis.name))
 g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal, label_list2)
 g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
 g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,2)))+ plot_annotation(title="Proximal")
-ggsave(g3, width=7, height=3, filename = sprintf('figs/proximal.pdf'))
-
+ggsave(g3, width=7, height=3, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
 
 #################################
 ## Assess quality of our negative outcomes 
 #################################
-#noc.i  <-  9
-#for (noc.i in 1:length(noc.pre.count.names)){ 
-#    noc.name  <-  noc.pre.count.names[noc.i]
-#    Y  <-  'death'
-#    A.temp  <-  A.final %>% mutate( 
-#                          outcome.time  = if_else (nna(!!rlang::sym(Y)), as.numeric( !!rlang::sym(Y) - tx.date, units = "days" ), tt)/ 365,
-#                          outcome.bool = ifelse( nna(!!rlang::sym(Y)), T, F),
-#                          noc = !!rlang::sym(noc.name)
-#        )
-#    # Raw
-#    m  <-  aalen( Surv(outcome.time, outcome.bool) ~ const(noc) +treatment.year_z,  data = A.temp, robust = 0)
-#    print(noc.name)
-#    print( c( coef(m)['const(noc)', c('Coef.', 'lower2.5%', 'upper97.5%')]) )
-#    # Adjust for X
-#    f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(noc) + %s',  paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
-#    m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
-#    print( c( coef(m)['const(noc)', c('Coef.', 'lower2.5%', 'upper97.5%')]) )
-#}
+
+# noc.i  <-  7
+# for (noc.i in 1:length(noc.pre.count.names)){ 
+#     noc.name  <-  noc.pre.count.names[noc.i]
+#     # noc.name  <-  noc.count.names[noc.i]
+#     # noc.name  <-  noc.post.count.names[noc.i]
+#     Y  <-  'death'
+#     A.temp  <-  A.final %>% mutate( 
+#                           outcome.time  = if_else (nna(!!rlang::sym(Y)), as.numeric( !!rlang::sym(Y) - tx.date, units = "days" ), tt)/ 365,
+#                           outcome.bool = ifelse( nna(!!rlang::sym(Y)), T, F),
+#                           noc = !!rlang::sym(noc.name)/pre.tx.days
+#                            # noc = !!rlang::sym(noc.name)/time.offset
+#                             # noc = !!rlang::sym(noc.name)/time.enrolled
+#         )
+#     # Raw
+#     m  <-  aalen( Surv(outcome.time, outcome.bool) ~ const(noc) +treatment.year_z,  data = A.temp, robust = 0)
+#     print(noc.name)
+#     print( c( coef(m)['const(noc)', c('Coef.', 'lower2.5%', 'upper97.5%')]) )
+#     # Adjust for X
+#     f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(noc) + %s',  paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
+#     m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
+#     print( c( coef(m)['const(noc)', c('Coef.', 'lower2.5%', 'upper97.5%')]) )
+# }
 
 
 #################################
