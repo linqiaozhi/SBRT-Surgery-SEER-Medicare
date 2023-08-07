@@ -8,6 +8,7 @@ library(haven)
 library(icd)#devtools::install_github("jackwasey/icd")
 source('utilities.R')
 source('codes.R')
+source('DrugCodes.R')
 source('file.paths.R')
 
 ################################
@@ -422,7 +423,7 @@ fn.RDS  <- sprintf("%s/PartD.RDS", rds.path)
   for (yeari in 1:length(years)) {
     year  <-  years[yeari]
     print(year)
-    PartD.filei  <-   read_dta(sprintf('%s/Part D files/pdesaf%s.dta', data.path, year) , 
+    PartD.filei  <-   read_dta(sprintf('%s/pdesaf%s.dta', data.path, year) , 
                                col_select=c('PATIENT_ID', 'SRVC_DT',  'PROD_SRVC_ID'))
     PartD.files[[year]]  <-  PartD.filei %>% inner_join(lung.SEER.pids)
   }
@@ -433,35 +434,31 @@ fn.RDS  <- sprintf("%s/PartD.RDS", rds.path)
 }
 
 
-#Create variables indicating the receipt and date of receipt of each drug included in the drug code list 
-drugs.patients<-patient.tx %>% select(PATIENT_ID)
+PartD.file.txdate  <-  PartD.file  %>% 
+    right_join(patient.tx %>% select( PATIENT_ID, tx.date)) %>% 
+    mutate(SRVC_DT = ymd(SRVC_DT))
 
+#Create variables indicating the receipt and date of receipt of each drug included in the drug code list 
+patient.drugs<-patient.tx %>% select(PATIENT_ID)
 for (i in 1:length(drugs)) {
   print(sprintf('%d/%d Prescribed Drugs', i, length(drugs)))
   drugoi <- drugs[[i]]
   drug.name <- names(drugs)[i]
-  drug.patient <- PartD.file %>% 
+  drug <- PartD.file.txdate %>% 
     mutate(
       temp = PROD_SRVC_ID %in% drugoi,
       temp.pre = if_else(temp & (SRVC_DT < tx.date), SRVC_DT, ymd(NA_character_)),
       temp.post = if_else(temp & (SRVC_DT > tx.date), SRVC_DT, ymd(NA_character_)),
       temp.any = if_else(temp, SRVC_DT, ymd(NA_character_))
     ) %>% 
-    
     group_by(PATIENT_ID) %>% 
-    
     summarise(
       !!drug.name := first(na.omit(temp.post)),
-      !!sprintf('%s_pre', drug.name) := first(na.omit(temp.pre)),
-      !!sprintf('%s_any', drug.name) := first(na.omit(temp.any)),
       !!sprintf('%s_pre_count', drug.name) := length((na.omit(temp.pre))),
-      !!sprintf('%s_pre_date_count', drug.name) := length(unique(na.omit(temp.pre))),
-      !!sprintf('%s_any_date_count', drug.name) := length(unique(na.omit(temp.any))),
+      !!sprintf('%s_any_count', drug.name ) := length((na.omit(temp.any))),
       !!sprintf('%s_post_count', drug.name) := length((na.omit(temp.post))),
-      !!sprintf('%s_post_date_count', drug.name) := length(unique(na.omit(temp.post)))
     )
-  
-  drugs.patients <- drugs.patients %>% left_join(drug.patient, by = 'PATIENT_ID')
+  patient.drugs <- patient.drugs %>% left_join(drug, by = 'PATIENT_ID')
 }
 
 
@@ -470,6 +467,9 @@ for (i in 1:length(drugs)) {
 # SECTION VI MBSF death
 ################################
 
+fofo  <- read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year))
+
+
 fn.RDS  <- sprintf("%s/MBSF.RDS", rds.path)
 if ( ! file.exists (fn.RDS) ) {
   mbsfs  <-  list()
@@ -477,7 +477,7 @@ if ( ! file.exists (fn.RDS) ) {
   for (yeari in 1:length(years)) {
     year  <-  years[yeari]
     print(year)
-        mbsfi  <-   read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year), col_select=c('PATIENT_ID', 'BENE_DEATH_DT', 'VALID_DEATH_DT_SW', 'BENE_PTA_TRMNTN_CD', 'BENE_PTB_TRMNTN_CD', 'BENE_HI_CVRAGE_TOT_MONS', 'BENE_SMI_CVRAGE_TOT_MONS', 'BENE_ENROLLMT_REF_YR'))
+        mbsfi  <-   read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year), col_select=c('PATIENT_ID', 'BENE_DEATH_DT', 'VALID_DEATH_DT_SW', 'BENE_PTA_TRMNTN_CD', 'BENE_PTB_TRMNTN_CD', sprintf('MDCR_STATUS_CODE_%02d', 1:12), 'BENE_HI_CVRAGE_TOT_MONS', 'BENE_SMI_CVRAGE_TOT_MONS', 'BENE_ENROLLMT_REF_YR'))
     # inner join with the SEER patients to reduce size
     mbsfs[[year]]  <-  mbsfi %>% 
       inner_join(lung.SEER.pids) 
@@ -488,14 +488,28 @@ if ( ! file.exists (fn.RDS) ) {
   mbsf  <-  readRDS(fn.RDS)
 }
 
-patient.mbsf <- mbsf %>% mutate( 
-                        death.date.mbsf = ifelse(mbsf$BENE_DEATH_DT!= "", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd )
 
-# If MBSF is used for any other purpose, need to be more savvy with this step
-patient.mbsf  <-  patient.mbsf %>% 
-    filter (nna(death.date.mbsf)) %>% 
-    group_by( PATIENT_ID) %>% 
-    summarise( death.date.mbsf = first(death.date.mbsf))
+
+
+# Need to get the number of months pre-tx during which the patient was enrolled. 
+# One record per patient per month enrolled
+# https://resdac.org/cms-data/variables/medicare-status-code-january
+mbsf.long  <- mbsf  %>% select( PATIENT_ID,BENE_ENROLLMT_REF_YR,  MDCR_STATUS_CODE_01:MDCR_STATUS_CODE_12) %>% pivot_longer(MDCR_STATUS_CODE_01:MDCR_STATUS_CODE_12, names_to= 'month') %>%
+    filter(value != '00') %>% 
+    mutate(year = BENE_ENROLLMT_REF_YR,
+           month = str_sub(month, -2),
+           date = ceiling_date(ymd(sprintf('%d-%s-01', year, month)), 'month') - days(1))
+mbsf.long  <-  mbsf.long %>% right_join(patient.tx %>% select( PATIENT_ID, tx.date))
+mbsf.pre.tx.months <- mbsf.long %>% group_by(PATIENT_ID) %>% summarise( pre.tx.months = sum( (date < tx.date)) )
+
+patient.mbsf <- mbsf %>% mutate( 
+                        death.date.mbsf.temp = ifelse(mbsf$BENE_DEATH_DT!= "", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd ) %>% 
+                        group_by( PATIENT_ID) %>% 
+                        summarise( 
+                                  death.date.mbsf = first(na.omit(death.date.mbsf.temp))
+                            ) %>%
+                        right_join(mbsf.pre.tx.months)
+
 
 
 ################################
@@ -506,7 +520,10 @@ A  <-  patient.tx %>%
     left_join( patient.dx, by = 'PATIENT_ID') %>% 
     left_join( patient.outpatient.procs, by = 'PATIENT_ID',) %>% 
     left_join( patient.mbsf, by = 'PATIENT_ID') %>%
-    left_join( patient.seer, by = 'PATIENT_ID')
+    left_join( patient.seer, by = 'PATIENT_ID') %>% 
+    left_join( patient.drugs, by = 'PATIENT_ID')  
+
+
 
 
 ################################
@@ -676,9 +693,9 @@ A  <- A %>% mutate(
                    Smoking = nna(smoking_pre),
                    Oxygen = nna(o2_pre) )
 
-cause.of.death<-case_when(
-  CAUSE_OF_DEATH_ICD_10 = 
-)
+# cause.of.death<-case_when(
+#   CAUSE_OF_DEATH_ICD_10 = 
+# )
 
 label_list  <-  list(  
                      age = 'Age',  
@@ -700,11 +717,11 @@ label_list  <-  list(
                      death      = 'Death',
                      thirty.day.mortality = '30-day mortality',
                      ninety.day.mortality = '90-day mortality',
-                     CAUSE_OF_DEATH_ICD_10 = 'ICD-10 Cause of Death',
                      cod.new = 'Cause of Death Category'
 )
 
 #A   <-  A.gt2010 %>% select(PATIENT_ID, names(label_list) , dx.date, death.date, seer.surgery ) %>% distinct(PATIENT_ID, .keep_all =T) #this no longer changes anything. However, I kept it because everything downstream references 'A'
+
 
 
 ################################
@@ -725,23 +742,25 @@ A.final <- A.final %>% filter(
 A.final %>% count(tx)
 A.final  <- A.final %>% filter ((valid.pet.scan & tx=='sbrt') | tx=='sublobar' ) 
 A.final %>% count(tx)
+A.final  <-  A.final %>% filter(pre.tx.months >= 12 ) 
+A.final %>% count(tx)
 A.final %>% count(year(tx.date), tx)
-
 A.final %>% filter (tx =='sbrt') %>% count(year(tx.date))
 
-comorbidities  <-  c('DM','DMcx', 'LiverMild', 'Pulmonary', 'PVD', 'CHF', 'MI', 'Renal', 'Stroke',  'PUD', 'Rheumatic', 'Dementia', 'LiverSevere', 'Paralysis', 'HIV', 'Smoking', 'Oxygen')
 tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
 f  <-  sprintf( 'tx ~ %s', paste( c(names(label_list), 
-                sprintf('%s_any_count', c(names(dx.icd), names(procs), )), 
-                sprintf('%s_pre_count', c(names(dx.icd), names(procs) ) )), collapse = "+") )
+                sprintf('%s_any_count', c(names(dx.icd), names(procs), names(drugs) )), 
+                sprintf('%s_pre_count', c(names(dx.icd), names(procs), names(drugs) ) )) , collapse = "+") )
 labels(A.final)  <-  label_list
 tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
-summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars3.htm')
+summary(tt) %>% write2html('/PHShome/gcl20/Research_Local/SEER-Medicare/tbls/all_vars4.htm')
 
-filename.out  <-  'data/A.final3.all.gte.65.RDS' 
-A.final %>% select ( PATIENT_ID:death.date.mbsf, names(label_list), tt, time.enrolled) %>%  write_rds( filename.out)
+filename.out  <-  'data/A.final5.all.gte.65.RDS' 
+A.final %>% select ( PATIENT_ID:death.date.mbsf, names(label_list),  Insulin:Anticoags_post_count, tt,pre.tx.months, time.enrolled) %>%  write_rds( filename.out)
 write_rds( label_list,'data/label.list.RDS')
 
+table(A.final$DIAB_C_any_count >0, A.final$Insulin_any_date_count >0)
+summary(A.final$Insulin_any_date_count)
 A.final %>% group_by(tx) %>% summarise( m = mean((tt)))
 
 A.final %>% group_by(year(tx.date)) %>% summarise ( mean( tx == 'sbrt')) 
@@ -750,10 +769,21 @@ count(year(tx.date), tx)
 ################################
 # Testing 
 ################################
+A.final %>% filter ( nna(METS))  %>% pull(PATIENT_ID) %>% head
+A.final %>% filter ( nna(METS), is.na(cancer_nonlung_any)) %>% pull (PATIENT_ID) %>% head
+A.final %>% filter (PATIENT_ID == 'lnK2020w0043216') %>% print(width=Inf)
 
+dx.long %>% filter ( PATIENT_ID == 'lnK2020w0043216' , DX %in% dx.icd[['METS']]$icd9 | DX %in% dx.icd[['METS']]$icd10  ) 
+
+table(nna(A.final$cancer_nonlung_any) , nna(A.final$METS))
 #A.final %>% filter (tx == 'sbrt') %>% sample_n(1) %>% glimpse
 #
 #A.final %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% glimpse
 #outpat.outpat.revenue %>% filter (PATIENT_ID == 'lnK2020y2293566' & HCPCS_CD %in% sbrt.cpts) %>% glimpse
 #outpat %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% mutate(ex = explain_code(as.icd9(PRNCPAL_DGNS_CD),condense=F)) %>% select (CLM_THRU_DT, ex) %>% print(n=Inf)
 #carrier %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% mutate(ex = explain_code(as.icd9(LINE_ICD_DGNS_CD),condense=F)) %>% select (CLM_THRU_DT, ex) %>% print(n=Inf)
+
+
+
+A.final %>% filter( other.cause.mortality == 'Death') %>% count(cod.new)
+A.final %>% filter( cause.specific.mortality == 'Death') %>% count(cod.new)
