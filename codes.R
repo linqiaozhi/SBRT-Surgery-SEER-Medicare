@@ -1,6 +1,34 @@
 library(icd)
 library(tidyverse)
-CPT_Codes  <-  read_csv('CPT_Codes_2020.csv') %>% rename(HCPC=`HCPC/MOD`, short_desc = `SHORT DESCRIPTION`, long_desc=`LONG DESCRIPTION`)
+
+################################
+# Load data frames which will be the "key" to the codes.  There are several
+# codes not in these data frames, as they have beend eprecated. These will be
+# added manually
+################################
+
+CPT_Codes  <-  read_csv('CPT_Codes_2020.csv') %>% rename(HCPC=`HCPC/MOD`, short_desc = `SHORT DESCRIPTION`, long_desc=`LONG DESCRIPTION`) %>% select( HCPC, long_desc)
+deprecated.codes  <- do.call (rbind, list(c('77373', 'Under Stereotactic Radiation Treatment Delivery'),
+            c('61793'  ,'Stereotactic radiosurgery (particle beam, gamma ray or linear accelerator), one or more sessions'),
+            c('0082T', 'Stereotactic rad delivery') ))
+colnames(deprecated.codes)  <- c('HCPC', 'long_desc')
+CPT_Codes <- CPT_Codes %>% rbind( deprecated.codes)
+
+icd9proc  <- read_fwf('tbls/icd9proc.txt') %>% select(-X3) %>% rename(code =X1, name = X2)
+icd10proc  <- read_fwf('tbls/icd10pcs.txt', fwf_positions(c(7, 78), c(13, NA), c("code", "name")))
+icdproc  <- rbind(icd9proc, icd10proc)
+
+
+
+deprecated.codes  <- do.call (rbind, list(
+          # c('3240', 'Under Stereotactic Radiation Treatment Delivery'),
+          c('61793'  ,'Stereotactic radiosurgery (particle beam, gamma ray or linear accelerator), one or more sessions'),
+          c('0082T', 'Stereotactic rad delivery') ))
+colnames(deprecated.codes)  <- c('HCPC', 'long_desc')
+CPT_Codes <- CPT_Codes %>% rbind( deprecated.codes)
+
+
+
 
 expand_range_procs   <-  function( from, to, CPT_Codes) {
     # get first character
@@ -47,13 +75,47 @@ expand.each.code  <-  function(code.list, icd9or10 = 'undefined') {
 valid.dxs  <- c( expand_range('1622','1629'), expand_range(as.icd10('C34'), as.icd10('C349')))
 sbrt.icds  <-  c('9230', '9231', '9232', '9233', '9239',
                     'DB22DZ', 'DB22HZZ', 'DB22JZZ')
-sublobar.icds  <-  c(  '3230', '3239', '3220', '3229', '0BBC4ZX', '0BBC4ZZ', '0BBC0ZX', '0BBC0ZZ', '0BBD4ZX', '0BBD4ZZ', '0BBD0ZX', '0BBD0ZZ', '0BBF4ZX', '0BBF4ZZ', '0BBF0ZX', '0BBF0ZZ', '0BBG4ZX', '0BBG4ZZ', '0BBG0ZX', '0BBG0ZZ', '0BBH4ZX', '0BBH4ZZ', '0BBH0ZX', '0BBH0ZZ', '0BBJ4ZX', '0BBJ4ZZ', '0BBJ0ZX', '0BBJ0ZZ', '0BBK4ZX', '0BBK4ZZ', '0BBK0ZX', '0BBK0ZZ', '0BBL4ZX', '0BBL4ZZ', '0BBL0ZX', '0BBL0ZZ', '0BBM4ZX', '0BBM4ZZ', '0BBM0ZX', '0BBM0ZZ')
-other.resection.icds  <-  c( '3240', '3241', '3249', '3260', '3250', '3259', '0BTC4ZX', '0BTC4ZZ', '0BTC0ZX', '0BTC0ZZ', '0BTD4ZX', '0BTD4ZZ', '0BTD0ZX', '0BTD0ZZ', '0BTF4ZX', '0BTF4ZZ', '0BTF0ZX', '0BTF0ZZ', '0BTG4ZX', '0BTG4ZZ', '0BTG0ZX', '0BTG0ZZ', '0BTH4ZX', '0BTH4ZZ', '0BTH0ZX', '0BTH0ZZ', '0BTJ4ZX', '0BTJ4ZZ', '0BTJ0ZX', '0BTJ0ZZ', '0BTK4ZX', '0BTK4ZZ', '0BTK0ZX', '0BTK0ZZ', '0BTL4ZX', '0BTL4ZZ', '0BTL0ZX', '0BTL0ZZ', '0BTM4ZX', '0BTM4ZZ', '0BTM0ZX', '0BTM0ZZ')
+sublobar.icds  <-  c(  '3230', '3239', '3220', '3229',  # ICD9 codes for sublobar
+                     '0BBC4ZX', '0BBC4ZZ', '0BBC0ZX', '0BBC0ZZ', '0BBD4ZX', '0BBD4ZZ', '0BBD0ZX', '0BBD0ZZ', '0BBF4ZX', '0BBF4ZZ', '0BBF0ZX', '0BBF0ZZ', '0BBG4ZX', '0BBG4ZZ', '0BBG0ZX', '0BBG0ZZ', '0BBH4ZX', '0BBH4ZZ', '0BBH0ZX', '0BBH0ZZ', '0BBJ4ZX', '0BBJ4ZZ', '0BBJ0ZX', '0BBJ0ZZ', '0BBK4ZX', '0BBK4ZZ', '0BBK0ZX', '0BBK0ZZ', '0BBL4ZX', '0BBL4ZZ', '0BBL0ZX', '0BBL0ZZ')
 
-#https://cdn.jamanetwork.com/ama/content_public/journal/surg/931810/soi140036supp1_prod.pdf?Expires=1684345221&Signature=OSPftfHA9rDQPKLJrRnmTuVgeN80y9G1jEx1SFmWPu8xdjKv-GfJLKrub~yKR12CYlUhXH6JMBap3PqTII4naX9ZndV10ahKSFYdWMciw4diKk9daxaK0V~4m7pTmaMw~a7H6H-Xqcke5-g~XeFlSz18EX08a-d5MQsC5Os0Um9v8Ng~y7-xB8t2tJygyztL2UqJqhdejzcXdUWCERoQ~fWXJJh640Qer8NojGa8Va2YT8mEXhu3q3GEsVUJ~dEooFq5X17r5w4~qzSfIylot3LJVVGxo9eslbLjfnumtjUIlbdNlLx8zoguvAjP8VoHUEpSQI88n~wOwPpKht68Bg <- &Key-Pair-Id=APKAIE5G5CRDK6RD3PGA
+
+# fofo  <-get.dates.of.procedure (medpari, c('3240'))
+# sum(nna(fofo))
+lobar.icds  <-  c(  '3241', '3249', 
+                     '0BTC4ZZ',  '0BTC0ZZ',  '0BTD4ZZ',  '0BTD0ZZ',  '0BTF4ZZ',  '0BTF0ZZ',  '0BTG4ZZ',  '0BTG0ZZ',  '0BTH4ZZ',  '0BTH0ZZ',  '0BTJ4ZZ',  '0BTJ0ZZ'  )
+other.resection.icds  <-  c(  '3250', '3259', '326','321',
+                            '0BBM4ZX', '0BBM4ZZ', '0BBM0ZX', '0BBM0ZZ', '0BTM4ZZ',  '0BTM0ZZ',  '0BTK4ZZ',  '0BTK0ZZ',  '0BTL4ZZ',  '0BTL0ZZ')
+# https://cdn.jamanetwork.com/ama/content_public/journal/surg/931810/soi140036supp1_prod.pdf?Expires=1694250325&Signature=BR7q2QxVAEOrC6fVe2FBHECGvajRtnPGDcnHBBikacu5qWQkb4mowNWgsS~j~lon2r1ZLbyRKWOiXlwG8KkZuuCOlJ-QaAV7hWa0eeIU3rKOE5OeH0POUZv1vofI5ZCYLDd4Viqiv~Ioemv0UUbIHVY-QtjZqmS7IuHbuEVVBf2ZTLtvbnMZ1HwJU8zxI9LPKWaNBE8ddk8JpPCgU2Deu6EY8qWHw~xThE7uJoiXktF5AgTsJCTM39DhVUh2lUKM9d8NUAIkivTDaL49fFN4ZrsCdR609ZSYxDwydjZsWADsvoMEyOFS0ntNJ8TedASVvn4F9TkvlyLXnCVEPiY8pA__&Key-Pair-Id=APKAIE5G5CRDK6RD3PGA
+
 
 
 sbrt.cpts  <-  c('77373', 'G0173', 'G0251', 'G0339', 'G0340', '61793',  '0082T' )
+
+
+
+sink('tbls/treatment.codes.txt'); 
+cat('SBRT CPTs:\n')
+CPT_Codes %>% filter (HCPC %in% sbrt.cpts ) %>% select(HCPC, long_desc) %>% print(n=Inf)
+cat('Could not find descriptions for:\n')
+print(sbrt.cpts[!sbrt.cpts %in%CPT_Codes$HCPC])
+cat('------------------------------\n\n\n\n')
+cat('Sublobar ICDs')
+icdproc %>% filter ( code %in% sublobar.icds) %>% print(n=Inf)
+cat('Could not find descriptions for:\n')
+print(sublobar.icds[ ! sublobar.icds %in% icdproc$code])
+cat('------------------------------\n\n\n\n')
+cat('Other resection ICDs')
+icdproc %>% filter ( code %in% other.resection.icds) %>% print(n=Inf)
+cat('Could not find descriptions for:\n')
+print(other.resection.icds[ ! other.resection.icds %in% icdproc$code])
+cat('------------------------------\n\n\n\n')
+cat('Lobar ICDs')
+icdproc %>% filter ( code %in% lobar.icds)
+cat('Could not find descriptions for:\n')
+print(lobar.icds[ ! lobar.icds %in% icdproc$code])
+sink()
+
+
 
 
 dx.icd   <- list (
@@ -126,31 +188,31 @@ dx.icd   <- list (
      'hemorrhoids' = list(
         'icd9' = c( expand_range('4550', '4559')     ) ,
         'icd10' =  expand_range('K640', 'K649')     ),
-     'optho' = list(
-        'icd9' = setdiff( expand_range('360', '379'), c( '37601', '37603' )) ,
-        'icd10' =  setdiff( expand_range('H00', 'H59'),   expand_range('H0501', ' H0502')))     ,
-     # 'optho2' = list(
-     #    'icd9' = c( 
-     #            expand_range('362', '36218'),  # Diabetic, hypertensive, and other retinopathy
-     #            expand_range('363', '36335') , # Uveitis
-     #            expand_range('364', '3643')  ,
-     #            expand_range('3623', '36237'),  # Retinal vascular occlusion                                     
-     #            expand_range('37034', '37034'),  # exposure keratitis                                      
-     #            expand_range('37741', '37741')  # ischemic optic neuropathy
-     # ),
-     #    'icd10' =  c( 
-     #            expand_range(as.icd10cm('E083'),as.icd10cm('E0839')), # Diabetic retinop
-     #            expand_range(as.icd10cm('E093'),as.icd10cm('E0939')),
-     #            expand_range(as.icd10cm('E103'),as.icd10cm('E1039')),
-     #            expand_range(as.icd10cm('E113'),as.icd10cm('E1139')),
-     #            expand_range(as.icd10cm('H35'),as.icd10cm('H3509')), # Other retinal disorders, including hypertensive retinopathy
-     #            expand_range(as.icd10cm('H20'),as.icd10cm('H209')), # Uveitis
-     #            expand_range(as.icd10cm('H30'),as.icd10cm('H309')), 
-     #            expand_range(as.icd10cm('H4411'),as.icd10cm('H44119')),
-     #            expand_range(as.icd10cm('H34'),as.icd10cm('H349')), # retinal vascular occlusiosn
-     #            expand_range(as.icd10cm('H4701'),as.icd10cm('H47019')) # exposure keratopathy
-     # )
-     # ),
+      'optho' = list(
+         'icd9' = setdiff( expand_range('360', '379'), c( '37601', '37603' )) ,
+         'icd10' =  setdiff( expand_range('H00', 'H59'),   expand_range('H0501', ' H0502')))     ,
+     'optho2' = list(
+        'icd9' = c( 
+                expand_range('362', '36218'),  # Diabetic, hypertensive, and other retinopathy
+                expand_range('363', '36335') , # Uveitis
+                expand_range('364', '3643')  ,
+                expand_range('3623', '36237'),  # Retinal vascular occlusion                                     
+                expand_range('37034', '37034'),  # exposure keratitis                                      
+                expand_range('37741', '37741')  # ischemic optic neuropathy
+     ),
+        'icd10' =  c( 
+                expand_range(as.icd10cm('E083'),as.icd10cm('E0839')), # Diabetic retinop
+                expand_range(as.icd10cm('E093'),as.icd10cm('E0939')),
+                # expand_range(as.icd10cm('E103'),as.icd10cm('E1039')),
+                # expand_range(as.icd10cm('E113'),as.icd10cm('E1139')),
+                expand_range(as.icd10cm('H35'),as.icd10cm('H3509')), # Other retinal disorders, including hypertensive retinopathy
+                expand_range(as.icd10cm('H20'),as.icd10cm('H209')), # Uveitis
+                expand_range(as.icd10cm('H30'),as.icd10cm('H309')), 
+                expand_range(as.icd10cm('H4411'),as.icd10cm('H44119')),
+                expand_range(as.icd10cm('H34'),as.icd10cm('H349')), # retinal vascular occlusiosn
+                expand_range(as.icd10cm('H4701'),as.icd10cm('H47019')) # exposure keratopathy
+     )
+     ),
      'ischemic_heart_disease' = list(
         'icd9' = expand_range( '410', '414'),
         'icd10' = expand_range( 'I20', 'I25') 
@@ -282,4 +344,7 @@ for (namei in names(procs)) {
     cat('------------------------------\n\n\n\n')
 } 
 sink()
+
+
+
 
