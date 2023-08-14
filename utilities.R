@@ -1,23 +1,23 @@
 library(ggtext)
 label_list  <-  readRDS('data/label.list.RDS')
 label_list2  <-  c( label_list,
-                   death = '**Overall mortality**', 
-                   death.cause.specific = '**Cancer-specific mortality**', 
-                   death.other.cause = '**Other mortality**', 
-                   death.90.day = '**90-day mortality**', 
-                   fall = '*Fall*',
-                   other_injury = '*Injury*',
-                   GU_sx = '*GU-related*',
-                   arthropathy = '*Arthropathy*',
-                   cholelithiasis = '*Cholelithiasis-related*',
-                   gout = '*Gout*',
-                   obstruction = '*Intestinal obstruction*',
-                   hernia = '*Abdominal hernia*',
-                   diverticular_disease = '*Diverticular disease*',
-                   hemorrhoids = '*Hemorrhoids*',
-                   pancreatic = '*Pancreatic*',
-                   optho2 = '*Ophthalmic*',
-                   oral = '*Oral*'
+                   death = 'Overall mortality', 
+                   death.cause.specific = 'Cancer-specific mortality', 
+                   death.other.cause = 'Other mortality', 
+                   death.90.day = '90-day mortality', 
+                   fall = 'Fall',
+                   other_injury = 'Injury',
+                   GU_sx = 'GU-related',
+                   arthropathy = 'Arthropathy',
+                   cholelithiasis = 'Cholelithiasis-related',
+                   gout = 'Gout',
+                   obstruction = 'Intestinal obstruction',
+                   hernia = 'Abdominal hernia',
+                   diverticular_disease = 'Diverticular disease',
+                   hemorrhoids = 'Hemorrhoids',
+                   pancreatic = 'Pancreatic',
+                   optho2 = 'Ophthalmic',
+                   oral = 'Oral'
 )
 # Codes
 
@@ -71,7 +71,7 @@ get.dates.of.dx  <-  function( A, proc.codes ) {
 
 
 make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
-    xlims <- c(0.3, 3)
+    xlims <- c(0.7, 3)
     tt  <-  ifelse (hazard, 'Hazard Ratio (log scale)', 'Hazard Ratio (log scale)')
     # row.names(odds.ratios_) <- gsub("_pre_count", "", row.names(odds.ratios_))
      row.names(odds.ratios_) <- gsub("_..._count", "",  row.names(odds.ratios_))
@@ -99,7 +99,7 @@ make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
  g
 }
 
-make.HD.plot  <-  function (odds.ratios_, label_list2, hazard =F, xlims = c(-0.1,0.15)) {
+make.HD.plot  <-  function (odds.ratios_, label_list2, hazard =F, xlims = c(-0.05,0.15)) {
     tt  <-  'Hazard Difference'
     g <- ggplot(odds.ratios_, aes(x = estimate, y=y_axis)) + 
         geom_vline(aes(xintercept = 0), size = 0.25, linetype = "dashed") +

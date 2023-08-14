@@ -30,7 +30,11 @@ A.final  <-  readRDS(filename.in)  %>%
 # analysis.name  <-  'pre.gt65.sublobarvsbrt'
 # analysis.name  <-  'pre.gt65.surgeryvsbrt'
 # analysis.name  <-  'any.80to90.allsurgery'
-analysis.name  <-  'any.gt65.sublobarvsbrt'
+# analysis.name  <-  'any.gt65.sublobarvsbrt.noadjpersontime'
+# analysis.name  <-  'any.gt65.sublobarvsbrt.adjpersontime'
+ analysis.name  <-  'pre.gt65.sublobarvsbrt.adjpersontime'
+# analysis.name  <-  'any.gt65.sublobarvsbrt'
+# analysis.name  <-  'any.gt65.sublobarvsbrt.w1only'
 A.final  <-  A.final %>% 
      filter(age >= 65) %>%
      filter ( tx %in% c('sbrt', 'sublobar') )
@@ -60,12 +64,12 @@ ne.any.count.names = sprintf( '%s_any_count', negative.exposures )
 ne.post.count.names = sprintf( '%s_post_count', negative.exposures )
 ne.pre.count.names = sprintf( '%s_pre_count', negative.exposures )
 negative.outcomes.oi  <-  c( 'fall',  'other_injury', 'diverticular_disease', 'hernia',  'arthropathy','GU_sx', 'optho2' )
-Zs  <-   sprintf( '%s_z', ne.any.count.names )
+Zs  <-   sprintf( '%s_z', ne.pre.count.names )
 outcome.names  <-  c( 'death', 'death.cause.specific', 'death.90.day', 'death.other.cause' )
 noc.any.count.names = sprintf( '%s_any_count', negative.outcomes.oi )
 noc.post.count.names = sprintf( '%s_post_count', negative.outcomes.oi )
 noc.pre.count.names = sprintf( '%s_pre_count', negative.outcomes.oi )
-noc.count.names  <-  noc.any.count.names
+noc.count.names  <-  noc.pre.count.names
 
 B  <-  1000
 print('X')
@@ -79,12 +83,16 @@ cat(i+1,'other.cause.mortality\n')
 
 # If using pre-counts, use pre.tx.days as the offset. If using post-counts, use time.enrolled. If using all counts, use pre.tx.days + time.enrolled
 A.final <- A.final %>% mutate(
-                              # time.offset = pre.tx.days
-                                time.offset = pre.tx.days + time.enrolled
+                               time.offset = pre.tx.days
+                                 # time.offset = pre.tx.days + time.enrolled
                               )
 # noc.count.names  <-  noc.pre.count.names
+
+#TODO: Delete
+# A.final  <- A.final %>% mutate_at(all_of(c(ne.any.count.names)), list(~. / time.offset))
+
 A.final  <- A.final %>% mutate( 
-    across( all_of(c(X.numeric,ne.any.count.names)), scale_ , .names = "{.col}_z" )
+    across( all_of(c(X.numeric,ne.pre.count.names)), scale_ , .names = "{.col}_z" )
 )
 
 ##################################
@@ -125,8 +133,8 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, adjust.for.sc
     coefs  <-  as.matrix(coef( m1)[,'Coef.'])
     negative_outcome_pred1  <-  mm %*% coefs
     # W2
-    # f  <-  sprintf( 'W2 ~ tx + %s + %s + offset(log(time.offset))', 
-     f  <-  sprintf( 'W2 ~ tx + %s + %s', 
+     f  <-  sprintf( 'W2 ~ tx + %s + %s + offset(log(time.offset))', 
+     # f  <-  sprintf( 'W2 ~ tx + %s + %s', 
                    paste(sprintf('const(%s)', Zs), collapse="+"),  
                    paste(sprintf('%s', adjust.for.scaled), collapse="+") )
     m2  <- glm( as.formula(f) , family = quasipoisson(link='log'), data = A.temp)
@@ -141,8 +149,9 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, adjust.for.sc
     # Poisson for count Ys
     if (Y.count) {
         A.temp  <- A.temp %>% mutate( Y.count  = !!rlang::sym(outcome.name),)
-        f  <-  sprintf( 'Y.count ~ tx + offset(log(time.offset))  + %s+ What1 + What2',  
-        # f  <-  sprintf( 'Y.count ~ tx + offset(log(time.enrolled))  + %s',  
+        #TODO: uncomment
+         f  <-  sprintf( 'Y.count ~ tx + offset(log(time.offset))  + %s+ What1 + What2',  
+          # f  <-  sprintf( 'Y.count ~ tx + offset(log(time.offset))  + %s+ What1',  
                        paste(sprintf('%s', adjust.for.scaled), collapse="+") )
          m  <-  glm( f  ,  data = A.temp, family = quasipoisson(link=log))
         if (verbose) 
@@ -154,7 +163,9 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, adjust.for.sc
                                      Y.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
                                      Y.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
         )
-        f  <-  sprintf( 'Surv(Y.time, Y.bool) ~ const(tx) + const(What1) + const(What2) +  %s',  
+        #TODO: uncomment
+         f  <-  sprintf( 'Surv(Y.time, Y.bool) ~ const(tx) + const(What1) + const(What2) +  %s',  
+          # f  <-  sprintf( 'Surv(Y.time, Y.bool) ~ const(tx) + const(What1)  +  %s',  
                        paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
         m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0, silent = 0)
         if (verbose) 
@@ -196,6 +207,16 @@ for (outcome.i in 1:length(outcome.names)){
    print(hazard.differences.outcomes.proximal[outcome.i,1:3])
 } 
 
+
+
+
+# g1.a  <-  make.HD.plot(hazard.differences.outcomes, label_list2) + ggtitle('Raw')
+# g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2) + ggtitle('Adj')
+# g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal, label_list2) + ggtitle('Proximal')
+# G  <-  (g1.a/ g2.a / g3.a ) + plot_layout(heights = (c(1, 1, 1))) 
+# ggsave(G, width=7, height=3, filename = sprintf('figs/%s.all.pdf', analysis.name))
+
+
 ################################
 #  Counts
 ################################
@@ -235,20 +256,28 @@ for (outcome.i in 1:length(noc.count.names)){
 # Plot 
 ################################
 
-g1.a  <-  make.HD.plot(hazard.differences.outcomes, label_list2) + ggtitle('Raw')
+height  <-  2
+g1.a  <-  make.HD.plot(hazard.differences.outcomes, label_list2) + ggtitle('Raw (unadjusted)')
 g1.b  <-  make.OR.plot(odds.ratios.nocs, label_list2)
-g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,2))) + plot_annotation(title="Raw")
-# ggsave(g1, width=7, height=3, filename = sprintf('figs/%s.raw.pdf', analysis.name))
-g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2) + ggtitle('Adj')
+g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) #+ plot_annotation(title="Raw")
+ ggsave(g1, width=4, height=2.55, filename = sprintf('figs/%s.raw.pdf', analysis.name))
+
+g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2) + ggtitle('Adjusted')
 g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list2)
-g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,2)))+ plot_annotation(title="Adj")
-# ggsave(g2, width=7, height=3, filename = sprintf('figs/%s.adj.pdf', analysis.name))
+g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Adj")
+ ggsave(g2, width=4, height=2.55, filename = sprintf('figs/%s.adj.pdf', analysis.name))
 g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal, label_list2) + ggtitle('Proximal')
 g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
-g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,2)))+ plot_annotation(title="Proximal")
-# ggsave(g3, width=7, height=3, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
+g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Proximal")
+ ggsave(g3, width=4, height=2.55, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
+
 G  <-  (g1.a/g1.b / g2.a / g2.b/ g3.a / g3.b) + plot_layout(heights = (c(1,2, 1,2, 1,2))) 
 ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name))
+
+
+G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
+ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
+
 
 #################################
 ## Assess quality of our negative outcomes 
