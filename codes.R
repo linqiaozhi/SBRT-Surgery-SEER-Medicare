@@ -93,26 +93,27 @@ sbrt.cpts  <-  c('77373', 'G0173', 'G0251', 'G0339', 'G0340', '61793',  '0082T' 
 
 
 
-sink('tbls/treatment.codes.txt'); 
-cat('SBRT CPTs:\n')
-CPT_Codes %>% filter (HCPC %in% sbrt.cpts ) %>% select(HCPC, long_desc) %>% print(n=Inf)
-cat('Could not find descriptions for:\n')
-print(sbrt.cpts[!sbrt.cpts %in%CPT_Codes$HCPC])
-cat('------------------------------\n\n\n\n')
-cat('Sublobar ICDs')
-icdproc %>% filter ( code %in% sublobar.icds) %>% print(n=Inf)
-cat('Could not find descriptions for:\n')
-print(sublobar.icds[ ! sublobar.icds %in% icdproc$code])
-cat('------------------------------\n\n\n\n')
-cat('Other resection ICDs')
-icdproc %>% filter ( code %in% other.resection.icds) %>% print(n=Inf)
-cat('Could not find descriptions for:\n')
-print(other.resection.icds[ ! other.resection.icds %in% icdproc$code])
+# sink('tbls/treatment.codes.txt'); 
+# cat('SBRT CPTs:\n')
+CPT_Codes %>% filter (HCPC %in% sbrt.cpts ) %>% select(HCPC, long_desc) %>% write_tsv('tbls/treatment.codes.sbrt.tsv')
+# cat('Could not find descriptions for:\n')
+# print(sbrt.cpts[!sbrt.cpts %in%CPT_Codes$HCPC])
+# cat('------------------------------\n\n\n\n')
+# cat('Sublobar ICDs')
+icdproc %>% filter ( code %in% sublobar.icds) %>% write_tsv('tbls/treatment.codes.sublobar.tsv')
+# cat('Could not find descriptions for:\n')
+# print(sublobar.icds[ ! sublobar.icds %in% icdproc$code])
 cat('------------------------------\n\n\n\n')
 cat('Lobar ICDs')
-icdproc %>% filter ( code %in% lobar.icds)
-cat('Could not find descriptions for:\n')
-print(lobar.icds[ ! lobar.icds %in% icdproc$code])
+icdproc %>% filter ( code %in% lobar.icds) %>% write_tsv('tbls/treatment.codes.lobectomy.tsv')
+# cat('Could not find descriptions for:\n')
+# print(lobar.icds[ ! lobar.icds %in% icdproc$code])
+cat('Other resection ICDs')
+icdproc %>% filter ( code %in% other.resection.icds) %>% write_tsv('tbls/treatment.codes.other.resection.tsv')
+
+# cat('Could not find descriptions for:\n')
+# print(other.resection.icds[ ! other.resection.icds %in% icdproc$code])
+cat('------------------------------\n\n\n\n')
 sink()
 
 
@@ -325,17 +326,19 @@ procs  <- list (
 
 sink('tbls/dx.icd.txt'); 
 for (namei in (names(dx.icd))) { 
-    cat(sprintf('Variable Name: %s', namei))
-    print('ICD9')
+    cat(sprintf('%s\n', namei))
     icd9.codes  <-  dx.icd[[namei]][['icd9']]
-    cat(sprintf('%s\n', paste(icd9.codes, explain_code(condense=F, as.icd9(icd9.codes)))))
-    print('ICD10')
+    cat(sprintf('%s\n', paste(sep='\t',icd9.codes,'ICD-9', explain_code(condense=F, as.icd9(icd9.codes)))))
     icd10.codes  <-  dx.icd[[namei]][['icd10']]
-    cat(sprintf('%s\n', paste(icd10.codes, explain_code(condense=F, as.icd10cm(icd10.codes)))))
-    cat('------------------------------\n\n\n\n')
+    cat(sprintf('%s\n', paste(sep='\t',icd10.codes, 'ICD-10', explain_code(condense=F, as.icd10cm(icd10.codes)))))
+    cat('\n')
 } 
 sink()
+
 #TODO:Explain_code doesn't work for the ICD10 codes starting with E. The expand_range does, so the code all works, but the output above gives NA for the E* codes. need to use explain_icd9_10( as.icd10('E033'))
+
+
+# to.print  <-  c('smoking', 'o2', 'other_bacterial_diseases', 'pneumonia_and_influenza', 'pressure_ulcer', 'ischemic_heart_disease', 'CHF', 'PVD', 'CVD', 'dementia', 'COPD', 'PUD', 'MILDLD', 'DIAB_UC', 'DIAB_C', 'PARA', 'RD', 'cancer_nonlung', 'MSLD', 'METS',  'mental_disorders', 'nervous_system', 'other_heart_disease', 'veins_lymphatics_other_circulatory', 'rheum',
 
 sink('tbls/proc.codes.txt'); 
 for (namei in names(procs)) { 

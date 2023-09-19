@@ -779,7 +779,7 @@ write_rds( label_list,'data/label.list.RDS')
 
 
 A.final %>% group_by(year(tx.date)) %>% summarise ( mean( tx == 'sbrt')) 
-count(year(tx.date), tx)
+
 
 ################################
 # Testing 
@@ -794,6 +794,45 @@ table( A.final$time.enrolled== 0, useNA="ifany")
 table( year(A.final$tx.date), useNA="ifany")
 
 table(nna(A.final$cancer_nonlung_any) , nna(A.final$METS))
+
+
+################################
+# Sensitivity analysis 
+################################
+A.final.sens1  <-  A %>% filter ( tx.date > dx.date & 
+                           ! ( nna(other.resection.date) & other.resection.date < tx.date ) &
+                            valid.death.indicator == 'valid')
+A.final.sens1 %>% count(tx)
+A.final.sens1 <- A.final.sens1 %>% filter(  
+                              age >=65,
+                  histology.cat!="Small Cell Carcinoma" & histology.cat!="Other/Unknown" &
+                  (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c") & 
+                  race != 'Unknown',
+              )
+A.final.sens1 %>% count(tx)
+A.final.sens1  <- A.final.sens1 %>% filter (dx.to.tx < 365) 
+A.final.sens1 %>% count(tx)
+A.final.sens1  <-  A.final.sens1 %>% filter(pre.tx.months >= 12 ) 
+A.final.sens1 %>% count(tx)
+A.final.sens1  <- A.final.sens1 %>% filter ((valid.pet.scan & tx=='sbrt') | tx=='sublobar' | tx == 'lobar' ) 
+A.final.sens1 %>% count(tx)
+A.final.sens1 %>% count(year(tx.date))
+A.final.sens1  <-  A.final.sens1 %>% filter ( 
+                                             tnm.n == '0' & tnm.m == '0' | 
+                                             ( tx == 'sublobar' & tnm.n %in% 
+                                             tx == 'sbrt' & tnm.n == c('0','1','2', '3') & tnm.m == '0' )
+                                             tnm.n %in% c('0','1','2', '3') & tnm.m =='0' )
+A.final.sens1  <-  A.final.sens1 %>% filter ( tnm.n %in% c('0','1','2', '3') & tnm.m =='0' )
+A.final.sens1 %>% count(tx)
+sum(A.final.sens1$tx == 'sublobar' & A.final.sens1$tnm.n %in% c('1','2','3')) / sum(A.final.sens1$tx == 'sublobar')
+
+A.final.sens1 %>% count(tx, tnm.n)
+
+A.final %>% count(tx)
+
+
+
+
 #A.final %>% filter (tx == 'sbrt') %>% sample_n(1) %>% glimpse
 #
 #A.final %>% filter (PATIENT_ID == 'lnK2020y2293566') %>% glimpse
