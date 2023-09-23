@@ -15,6 +15,8 @@ set.seed(3)
 # Load data 
 ################################
 subset.name <- 'all.gte.65'
+# subset.name <- 'all.gte.65.sens1'
+
 filename.in  <-  sprintf('data/A.final7.%s.RDS', subset.name)
 A.final  <-  readRDS(filename.in)  %>% 
     mutate(treatment.year = year(tx.date),
@@ -31,8 +33,8 @@ A.final  <-  readRDS(filename.in)  %>%
 # analysis.name  <-  'pre.gt65.surgeryvsbrt'
 # analysis.name  <-  'any.80to90.allsurgery'
 # analysis.name  <-  'any.gt65.sublobarvsbrt.noadjpersontime'
-# analysis.name  <-  'any.gt65.sublobarvsbrt.adjpersontime'
- analysis.name  <-  'pre.gt65.sublobarvsbrt.adjpersontime'
+analysis.name  <-  'any.gt65.sublobarvsbrt.adjpersontime'
+ # analysis.name  <-  'pre.gt65.sublobarvsbrt.adjpersontime.sens1'
 # analysis.name  <-  'any.gt65.sublobarvsbrt'
 # analysis.name  <-  'any.gt65.sublobarvsbrt.w1only'
 A.final  <-  A.final %>% 
@@ -95,6 +97,19 @@ A.final  <- A.final %>% mutate(
     across( all_of(c(X.numeric,ne.pre.count.names)), scale_ , .names = "{.col}_z" )
 )
 
+################################
+# Table 1 
+################################
+Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/Resources/app/quarto/bin/tools")
+
+library(arsenal)
+tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
+f  <-  sprintf( 'tx ~ %s', paste( names(label_list), collapse = "+") )
+labels(A.final)  <-  label_list
+tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
+summary(tt) %>% write2html('/Users/george/Research_Local/SEER-Medicare/tbls/table1.htm')
+
+
 ##################################
 ### Inspect negative outcomes 
 ##################################
@@ -125,6 +140,7 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, adjust.for.sc
     # W1
     f  <-  sprintf( 'Surv(W1.time, W1.bool) ~ const(tx) +%s+ %s',  
                    paste(sprintf('const(%s)', Zs), collapse="+"), 
+                   # paste(sprintf('const(tx:%s)', Zs), collapse="+"), 
                    paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
     m1  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0, silent = 0 )
     if (verbose) 
@@ -135,7 +151,7 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, adjust.for.sc
     # W2
      f  <-  sprintf( 'W2 ~ tx + %s + %s + offset(log(time.offset))', 
      # f  <-  sprintf( 'W2 ~ tx + %s + %s', 
-                   paste(sprintf('const(%s)', Zs), collapse="+"),  
+                   paste(sprintf('%s', Zs), collapse="+"),  
                    paste(sprintf('%s', adjust.for.scaled), collapse="+") )
     m2  <- glm( as.formula(f) , family = quasipoisson(link='log'), data = A.temp)
     if (verbose) 
@@ -208,6 +224,8 @@ for (outcome.i in 1:length(outcome.names)){
 } 
 
 
+#TODO: Delete
+# mout  <-  two.step(A.final, Zs,  outcome.name, noc.count.names, adjust.for.scaled, verbose = T)
 
 
 # g1.a  <-  make.HD.plot(hazard.differences.outcomes, label_list2) + ggtitle('Raw')
@@ -259,17 +277,17 @@ for (outcome.i in 1:length(noc.count.names)){
 height  <-  2
 g1.a  <-  make.HD.plot(hazard.differences.outcomes, label_list2) + ggtitle('Raw (unadjusted)')
 g1.b  <-  make.OR.plot(odds.ratios.nocs, label_list2)
-g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) #+ plot_annotation(title="Raw")
- ggsave(g1, width=4, height=2.55, filename = sprintf('figs/%s.raw.pdf', analysis.name))
+# g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) #+ plot_annotation(title="Raw")
+ # ggsave(g1, width=5, height=2.55, filename = sprintf('figs/%s.raw.pdf', analysis.name))
 
 g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2) + ggtitle('Adjusted')
 g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list2)
-g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Adj")
- ggsave(g2, width=4, height=2.55, filename = sprintf('figs/%s.adj.pdf', analysis.name))
+# g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Adj")
+ # ggsave(g2, width=5, height=2.55, filename = sprintf('figs/%s.adj.pdf', analysis.name))
 g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal, label_list2) + ggtitle('Proximal')
 g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
-g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Proximal")
- ggsave(g3, width=4, height=2.55, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
+# g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Proximal")
+ # ggsave(g3, width=4, height=2.55, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
 
 G  <-  (g1.a/g1.b / g2.a / g2.b/ g3.a / g3.b) + plot_layout(heights = (c(1,2, 1,2, 1,2))) 
 ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name))
@@ -277,6 +295,122 @@ ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name
 
 G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
 ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
+
+
+
+################################
+# Check effect of F 
+################################
+
+two.step.resid  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, adjust.for.scaled, Y.count = F, verbose = F, resids = NULL){
+    # Stage 1: W1 is non-cause mortality, W2 is the sum of negative control outcomes (excluding the negative outcome of interest)
+    W1  <-  'death.other.cause'
+    A.temp  <-  A.final2 %>% mutate( 
+                                    W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date, units = "days" ), tt)/365,
+                                    W1.bool = ifelse( nna(!!rlang::sym(W1)), T, F),
+                                    W2 = rowSums( ( across( all_of(noc.names.temp)))),
+    )
+    # W1
+    f  <-  sprintf( 'Surv(W1.time, W1.bool) ~ const(tx) +%s+ %s',  
+                   paste(sprintf('const(%s)', Zs), collapse="+"), 
+                   # paste(sprintf('const(tx:%s)', Zs), collapse="+"), 
+                   paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
+    m1  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0, silent = 0 )
+    if (verbose) 
+        print(summary(m1))
+    mm  <-  model.matrix(as.formula(f), A.temp)[,-1] 
+    coefs  <-  as.matrix(coef( m1)[,'Coef.'])
+    negative_outcome_pred1  <-  mm %*% coefs
+    # W2
+    f  <-  sprintf( 'W2 ~ tx + %s + %s + offset(log(time.offset))', 
+                   # f  <-  sprintf( 'W2 ~ tx + %s + %s', 
+                   paste(sprintf('%s', Zs), collapse="+"),  
+                   paste(sprintf('%s', adjust.for.scaled), collapse="+") )
+    m2  <- glm( as.formula(f) , family = quasipoisson(link='log'), data = A.temp)
+    if (verbose) 
+        print(summary(m2))
+    negative_outcome_pred2  <-  predict(m2, type = 'link')
+    A.temp  <-  A.temp %>% mutate( 
+                                  What1 = scale(negative_outcome_pred1[,1]),
+                                  What2 = scale(negative_outcome_pred2)
+    )
+    if (!is.null(resids)) {
+        A.temp$resids  <-  resids
+    }
+    # Stage 2
+    # Poisson for count Ys
+    if (Y.count) {
+        A.temp  <- A.temp %>% mutate( Y.count  = !!rlang::sym(outcome.name),)
+        if (is.null(resids)) {
+            f  <-  sprintf( 'Y.count ~ tx + offset(log(time.offset))  + %s+ What1 + What2',  paste(sprintf('%s', adjust.for.scaled), collapse="+") )
+        } else {
+            f  <-  sprintf( 'Y.count ~ tx + offset(log(time.offset))  + %s+ What1 + What2 + resids',  paste(sprintf('%s', adjust.for.scaled), collapse="+") )
+        }
+        m  <-  glm( f  ,  data = A.temp, family = quasipoisson(link=log))
+        if (verbose) 
+            print(summary(m))
+        if (!is.null(resids)) boot.res  <-  exp(c( coef(m)['resids'] ))
+    }else{
+        # Aalen's for time-to-event Ys
+        A.temp  <- A.temp %>% mutate(
+                                     Y.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+                                     Y.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
+        )
+        if (is.null(resids)) {
+            f  <-  sprintf( 'Surv(Y.time, Y.bool) ~ const(tx) + const(What1) + const(What2) +  %s',  paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
+        }else {
+            f  <-  sprintf( 'Surv(Y.time, Y.bool) ~ const(tx) + const(What1) + const(What2) +  %s + const(resids)',  paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
+        }
+        m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0, silent = 0)
+        if (verbose) 
+            print(summary(m))
+        if (!is.null(resids)) boot.res  <-  coef(m)['const(resids)', 'Coef.']
+    }
+    if (is.null(resids)) {
+        return(resid(m))
+    }else {
+        return(boot.res)
+    }
+}
+
+
+
+outcome.name  <- 'fall_pre_count'
+noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
+rout  <-  two.step.resid(A.final, Zs,  outcome.name, noc.names.temp, adjust.for.scaled,Y.count =T, verbose=T, resids = NULL)
+outcome.name  <- 'death.cause.specific'
+noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
+mean.out  <-  two.step.resid(A.final, Zs,  outcome.name, noc.count.names, adjust.for.scaled, resids = rout, verbose=T)
+mean.out
+
+est_boot <- parallel::mclapply(1:B, function(bb){
+    A.final2  <-  A.final[sample(nrow(A.final),replace=T ),]
+    outcome.name  <- 'fall_pre_count'
+    noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
+    rout  <-  two.step.resid(A.final2, Zs,  outcome.name, noc.names.temp, adjust.for.scaled,Y.count =T, verbose=F, resids = NULL)
+    outcome.name  <- 'death.cause.specific'
+    noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
+    mout  <-  two.step.resid(A.final2, Zs,  outcome.name, noc.count.names, adjust.for.scaled, resids = rout, verbose=F)
+    return(mout)
+}, mc.cores =8)
+se  <-  sd(unlist(lapply(est_boot, function(x) x[1])))
+c( mean.out, mean.out - 1.96*se, mean.out + 1.96*se )
+
+
+
+
+
+
+# est_boot <- parallel::mclapply(1:B, function(bb){
+#     A.final2  <-  A.final[sample(nrow(A.final),replace=T ),]
+#     boot.res  <-  two.step(A.final2, Zs,  outcome.name, noc.names.temp,adjust.for.scaled, Y.count=T, verbose=F)
+#     return(boot.res)
+# }, mc.cores =8)
+# se  <-  sd(unlist(lapply(est_boot, function(x) x[1])))
+# odds.ratios.nocs.proximal[outcome.i,1:3]  <-  c( mout[1], mout[1] - 1.96*se, mout[1] + 1.96*se )
+# print(odds.ratios.nocs.proximal[outcome.i,1:3])
+
+
 
 
 #################################
