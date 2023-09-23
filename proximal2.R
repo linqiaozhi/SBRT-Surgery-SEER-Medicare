@@ -22,11 +22,13 @@ A.final  <-  readRDS(filename.in)  %>%
     mutate(treatment.year = year(tx.date),
             death.90.day = if_else ( ninety.day.mortality, death, as.Date(NA_character_)),
             death.cause.specific = if_else ( cause.specific.mortality == 'Death', death, as.Date(NA_character_)),
-            death.cause.specific = if_else ( cause.specific.mortality == 'Death', death, as.Date(NA_character_)),
             death.other.cause = if_else ( other.cause.mortality == 'Death', death, as.Date(NA_character_)),
+            death.other.cause.gt90day = if_else ( other.cause.mortality == 'Death' & tt > 90, death, as.Date(NA_character_)),
             pre.tx.days = pre.tx.months * 30.5
     )
 
+A.final %>% filter ( nna(death.other.cause ) ) %>% select(tt) %>% table()   
+table ( nna(A.final$death.other.cause) , nna(A.final$death.other.cause.gt90day), useNA="ifany")
 
 # Define the analysis
 # analysis.name  <-  'pre.gt65.sublobarvsbrt'
@@ -67,7 +69,7 @@ ne.post.count.names = sprintf( '%s_post_count', negative.exposures )
 ne.pre.count.names = sprintf( '%s_pre_count', negative.exposures )
 negative.outcomes.oi  <-  c( 'fall',  'other_injury', 'diverticular_disease', 'hernia',  'arthropathy','GU_sx', 'optho2' )
 Zs  <-   sprintf( '%s_z', ne.pre.count.names )
-outcome.names  <-  c( 'death', 'death.cause.specific', 'death.90.day', 'death.other.cause' )
+outcome.names  <-  c( 'death', 'death.cause.specific', 'death.90.day', 'death.other.cause' , 'death.other.cause.gt90day')
 noc.any.count.names = sprintf( '%s_any_count', negative.outcomes.oi )
 noc.post.count.names = sprintf( '%s_post_count', negative.outcomes.oi )
 noc.pre.count.names = sprintf( '%s_pre_count', negative.outcomes.oi )
@@ -131,7 +133,7 @@ summary(tt) %>% write2html('/Users/george/Research_Local/SEER-Medicare/tbls/tabl
 ################################
 two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, adjust.for.scaled, Y.count = F, verbose = F){
     # Stage 1: W1 is non-cause mortality, W2 is the sum of negative control outcomes (excluding the negative outcome of interest)
-    W1  <-  'death.other.cause'
+    W1  <-  'death.other.cause.gt90day'
     A.temp  <-  A.final2 %>% mutate( 
                                     W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date, units = "days" ), tt)/365,
                                     W1.bool = ifelse( nna(!!rlang::sym(W1)), T, F),
@@ -268,31 +270,67 @@ for (outcome.i in 1:length(noc.count.names)){
 }
 
 
-
-
 ################################
-# Plot 
+# Individual plots
 ################################
 
 height  <-  2
-g1.a  <-  make.HD.plot(hazard.differences.outcomes, label_list2) + ggtitle('Raw (unadjusted)')
+Y.toplot  <-  c('death', 'death.90.day', 'death.other.cause.gt90day', 'death.cause.specific')
+hazard.differences.outcomes.toplot  <-  hazard.differences.outcomes[Y.toplot,]
+hazard.differences.outcomes.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.toplot)
+g1.a  <-  make.HD.plot(hazard.differences.outcomes.toplot, label_list2) 
 g1.b  <-  make.OR.plot(odds.ratios.nocs, label_list2)
-# g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) #+ plot_annotation(title="Raw")
- # ggsave(g1, width=5, height=2.55, filename = sprintf('figs/%s.raw.pdf', analysis.name))
+g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) + plot_annotation(title="Raw (Unadjusted)")
+ggsave(g1, width=6, height=2.65, filename = sprintf('figs/%s.raw.pdf', analysis.name))
 
-g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2) + ggtitle('Adjusted')
+
+hazard.differences.outcomes.adj.toplot  <-  hazard.differences.outcomes.adj[Y.toplot,]
+hazard.differences.outcomes.adj.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.adj.toplot)
+g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj.toplot, label_list2)
 g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list2)
-# g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Adj")
- # ggsave(g2, width=5, height=2.55, filename = sprintf('figs/%s.adj.pdf', analysis.name))
-g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal, label_list2) + ggtitle('Proximal')
+ g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))+ plot_annotation(title="Adjusted")
+ ggsave(g2, width=6, height=2.65, filename = sprintf('figs/%s.adj.pdf', analysis.name))
+
+hazard.differences.outcomes.proximal.toplot  <-  hazard.differences.outcomes.proximal[c('death.cause.specific'),]
+hazard.differences.outcomes.proximal.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.proximal.toplot)
+g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal.toplot, label_list2)
 g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
-# g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Proximal")
- # ggsave(g3, width=4, height=2.55, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
+ g3  <-  g3.a / g3.b + plot_layout(heights = (c(0.25,height)))+ plot_annotation(title="Proximal")
+ggsave(g3, width=6, height=2.65, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
 
 G  <-  (g1.a/g1.b / g2.a / g2.b/ g3.a / g3.b) + plot_layout(heights = (c(1,2, 1,2, 1,2))) 
 ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name))
+G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
+ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
 
 
+
+################################
+# Signle plot
+################################
+
+height  <-  2
+Y.toplot  <-  c('death', 'death.90.day', 'death.other.cause.gt90day', 'death.cause.specific')
+hazard.differences.outcomes.toplot  <-  hazard.differences.outcomes[Y.toplot,]
+hazard.differences.outcomes.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.toplot)
+g1.a  <-  make.HD.plot(hazard.differences.outcomes.toplot, label_list2) + ggtitle('Raw (unadjusted)')
+g1.b  <-  make.OR.plot(odds.ratios.nocs, label_list2)
+g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) #+ plot_annotation(title="Raw")
+ ggsave(g1, width=5, height=2.55, filename = sprintf('figs/%s.raw.pdf', analysis.name))
+hazard.differences.outcomes.adj.toplot  <-  hazard.differences.outcomes.adj[Y.toplot,]
+hazard.differences.outcomes.adj.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.adj.toplot)
+g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj.toplot, label_list2) + ggtitle('Adjusted')
+g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list2)
+# g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Adj")
+ # ggsave(g2, width=5, height=2.55, filename = sprintf('figs/%s.adj.pdf', analysis.name))
+hazard.differences.outcomes.proximal.toplot  <-  hazard.differences.outcomes.proximal[c('death.cause.specific'),]
+hazard.differences.outcomes.proximal.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.proximal.toplot)
+g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal.toplot, label_list2) + ggtitle('Proximal')
+g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
+# g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Proximal")
+ # ggsave(g3, width=4, height=2.55, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
+G  <-  (g1.a/g1.b / g2.a / g2.b/ g3.a / g3.b) + plot_layout(heights = (c(1,2, 1,2, 1,2))) 
+ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name))
 G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
 ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
 
