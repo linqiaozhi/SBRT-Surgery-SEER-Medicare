@@ -11,23 +11,11 @@ library(ggplot2)
 source('utilities.R')
 set.seed(3)
 
-#################################
-## delete 
-#################################
-#A.final.old.rec  <-  readRDS('data/A.final10.all.gte.65_old_recreate.RDS')
-#A.final.old  <-  readRDS('data/A.final8.all.gte.65_old.RDS') %>% filter (tx %in% c('sbrt', 'sublobar'))
-
-#ids  <- which(!A.final.old$PATIENT_ID %in% A.final.old.rec$PATIENT_ID)
-#ids
-#A.final.old[ids[1],] %>% glimpse
-
 
 ################################
 # Load data 
 ################################
  subset.name <- 'all.gte.65'
- # subset.name <- 'all.gte.65_old_recreate'
- # subset.name <- 'all.gte.65_old'
  # subset.name <- 'sens1'
 
 filename.in  <-  sprintf('data/A.final20.%s.RDS', subset.name)
@@ -39,42 +27,26 @@ A.final  <-  readRDS(filename.in)  %>%
             death.other.cause.gt90day = if_else ( other.cause.mortality == 'Death' & tt > 90, death, as.Date(NA_character_)),
             pre.tx.days = pre.tx.months * 30.5,
     )
+A.final$tx  <-  droplevels(A.final$tx)
 table( A.final$tx, useNA="ifany")
 
 # Define the analysis
- analysis.name  <-  'gte65'
- analysis.name  <-  'gte65.microscopically.confirmed'
- analysis.name  <-  '65.80.microscopically.confirmed'
  analysis.name  <-  'primary'
- # analysis.name  <-  'primary.65.80'
- # analysis.name  <-  'gte65.sens1'
-  # analysis.name  <-  'gte65.extendedX'
+# analysis.name  <-  'sens1'
  # A.final  <-  A.final %>% 
   # filter(age >= 65 & age <= 80) 
-  # filter ( tx %in% c('sbrt', 'sublobar') )
-# mutate(tx = factor(case_when( tx == 'sbrt' ~ 'sbrt', tx == 'sublobar' | tx == 'lobar' ~ 'surgery'), levels = c('surgery', 'sbrt')))
-A.final$tx  <-  droplevels(A.final$tx)
-# A.final %>% filter (tx == 'sublobar') %>% count(tnm.n)
-A.final %>% filter (tx == 'sublobar') %>% group_by(tnm.n >0) %>% summarise(n = n()) %>% mutate( freq = n / sum(n) )
-# table( A.final$dialysis_pre_count, useNA="ifany")
-# table( A.final$histology, useNA="ifany")
+# A.final %>% filter (tx == 'sublobar') %>% group_by(tnm.n >0) %>% summarise(n = n()) %>% mutate( freq = n / sum(n) )
 
 
 # Define X
-# X.factor  <-  c('t_stage_8','sex', 'race', 'marital.status', 'histology' ) 
  X.factor  <-  c('sex', 'race', 'marital.status', 'histology' ) 
 X.numeric  <-  c('age', 'size', 'treatment.year', sprintf('%s_pre_count', c(
-                     # DMEs
-                       # 'hospital_beds_and_supplies', 'wheelchairs_accessories', 'walking_aids', 'O2accessories', 'other_supplies', 'diabetic_footwear', 'transportation_services', 
                      # Diagnoses
-                        # 'smoking', 'o2', 'other_bacterial_diseases', 'pneumonia_and_influenza', 'pressure_ulcer', 'ischemic_heart_disease', 'CHF','other_heart_disease', 'PVD', 'CVD', 'dementia', 'COPD','other_lung', 'PUD', 'MILDLD', 'DIAB_UC', 'DIAB_C', 'PARA', 'RD',  'MSLD',   'mental_disorders', 'nervous_system',  'veins_lymphatics_other_circulatory', 'rheum', 'dialysis', 'echo',
                         'smoking', 'o2',  'pneumonia_and_influenza','asthma', 'COPD','interstitial_lung', 'pressure_ulcer', 'ischemic_heart_disease', 'CHF', 'PVD', 'CVD', 'dementia',   'MILDLD','MSLD', 'DIAB_UC', 'DIAB_C',  'RD', 'mental_disorders', 'nervous_system',   'dialysis', 'echo',
                      # Drugs
                      'Insulin', 'Anticoags')
                          )) 
 X.factor.min  <-  c('t_stage_8','sex', 'race',  'histology' ) 
-X.numeric.min  <-  c('age', 'treatment.year', sprintf('%s_pre_count', c( 'smoking', 'o2',  'ischemic_heart_disease', 'CHF', 'other_heart_disease',  'echo','dialysis', 'dementia', 'COPD', 'other_lung', 'DIAB_C',  'MSLD'))) 
-# adjust.for.scaled  <-  ( c(sprintf('%s_z', X.numeric.min), X.factor.min) )  # To use full set, change to X.factor and X.numeric
 adjust.for.scaled  <-  ( c(sprintf('%s_z', X.numeric), X.factor) )  # To use full set, change to X.factor and X.numeric
 
 
@@ -100,16 +72,7 @@ for (i in 1:length(noc.count.names)) cat(i, noc.count.names[i], '\n')
 cat(i+1,'other.cause.mortality\n')
 
 
-# If using pre-counts, use pre.tx.days as the offset. If using post-counts, use time.enrolled. If using all counts, use pre.tx.days + time.enrolled
-A.final <- A.final %>% mutate(
-                               time.offset = pre.tx.days
-                                 # time.offset = pre.tx.days + time.enrolled
-                              )
-# noc.count.names  <-  noc.pre.count.names
-
-#TODO: Delete
-# A.final  <- A.final %>% mutate_at(all_of(c(ne.any.count.names)), list(~. / time.offset))
-
+A.final <- A.final %>% mutate( time.offset = pre.tx.days)
 A.final  <- A.final %>% mutate( 
     across( all_of(c(X.numeric,ne.pre.count.names)), scale_ , .names = "{.col}_z" )
 )
@@ -139,9 +102,7 @@ summary(tt) %>% write2html(sprintf('/Users/george/Research_Local/SEER-Medicare/t
 #    table(A.temp$outcome.count)
 #    hist(A.temp %>% filter (outcome.count > 0) %>% pull(outcome.count), breaks = 100)
 #}
-
-# g  <-  A.final %>% select( all_of(noc.count.names)) %>% gather() %>% filter(value >0) %>%  ggplot(aes(value)) + geom_histogram() + facet_wrap(~key, scales = 'free')  + scale_y_sqrt() + cowplot::theme_cowplot()  
-# ggsave(g, file='figs/noc.counts.pdf', width = 10, height = 10, dpi = 300)
+# g  <-  A.final %>% select( all_of(noc.count.names)) %>% gather() %>% filter(value >0) %>%  ggplot(aes(value)) + geom_histogram() + facet_wrap(~key, scales = 'free')  + scale_y_sqrt() + cowplot::theme_cowplot()  # ggsave(g, file='figs/noc.counts.pdf', width = 10, height = 10, dpi = 300)
 
 ################################
 # Proximal  function 
@@ -182,9 +143,7 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, adjust.for.sc
     # Poisson for count Ys
     if (Y.count) {
         A.temp  <- A.temp %>% mutate( Y.count  = !!rlang::sym(outcome.name),)
-        #TODO: uncomment
          f  <-  sprintf( 'Y.count ~ tx + offset(log(time.offset))  + %s+ What1 + What2',  
-          # f  <-  sprintf( 'Y.count ~ tx + offset(log(time.offset))  + %s+ What1',  
                        paste(sprintf('%s', adjust.for.scaled), collapse="+") )
          m  <-  glm( f  ,  data = A.temp, family = quasipoisson(link=log))
         if (verbose) 
@@ -196,9 +155,7 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, adjust.for.sc
                                      Y.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
                                      Y.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
         )
-        #TODO: uncomment
          f  <-  sprintf( 'Surv(Y.time, Y.bool) ~ const(tx) + const(What1) + const(What2) +  %s',  
-          # f  <-  sprintf( 'Surv(Y.time, Y.bool) ~ const(tx) + const(What1)  +  %s',  
                        paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
         m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0, silent = 0)
         if (verbose) 
@@ -239,17 +196,6 @@ for (outcome.i in 1:length(outcome.names)){
    hazard.differences.outcomes.proximal[outcome.i,1:3]  <-  c( mout[1], mout[1] - 1.96*se, mout[1] + 1.96*se )
    print(hazard.differences.outcomes.proximal[outcome.i,1:3])
 } 
-
-
-#TODO: Delete
-# mout  <-  two.step(A.final, Zs,  outcome.name, noc.count.names, adjust.for.scaled, verbose = T)
-
-
-# g1.a  <-  make.HD.plot(hazard.differences.outcomes, label_list2) + ggtitle('Raw')
-# g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj, label_list2) + ggtitle('Adj')
-# g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal, label_list2) + ggtitle('Proximal')
-# G  <-  (g1.a/ g2.a / g3.a ) + plot_layout(heights = (c(1, 1, 1))) 
-# ggsave(G, width=7, height=3, filename = sprintf('figs/%s.all.pdf', analysis.name))
 
 
 ################################
@@ -314,10 +260,6 @@ g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
  g3  <-  g3.a / g3.b + plot_layout(heights = (c(0.25,height)))+ plot_annotation(title="Proximal")
 ggsave(g3, width=6, height=2.65, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
 
-# G  <-  (g1.a/g1.b / g2.a / g2.b/ g3.a / g3.b) + plot_layout(heights = (c(1,2, 1,2, 1,2))) 
-# ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name))
-# G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
-# ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
 
 
 
@@ -325,30 +267,30 @@ ggsave(g3, width=6, height=2.65, filename = sprintf('figs/%s.proximal.pdf', anal
 # Signle plot
 ################################
 
-height  <-  2
-Y.toplot  <-  c('death', 'death.90.day', 'death.other.cause.gt90day', 'death.cause.specific')
-hazard.differences.outcomes.toplot  <-  hazard.differences.outcomes[Y.toplot,]
-hazard.differences.outcomes.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.toplot)
-g1.a  <-  make.HD.plot(hazard.differences.outcomes.toplot, label_list2) + ggtitle('Raw (unadjusted)')
-g1.b  <-  make.OR.plot(odds.ratios.nocs, label_list2)
-g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) #+ plot_annotation(title="Raw")
- ggsave(g1, width=5, height=2.55, filename = sprintf('figs/%s.raw.pdf', analysis.name))
-hazard.differences.outcomes.adj.toplot  <-  hazard.differences.outcomes.adj[Y.toplot,]
-hazard.differences.outcomes.adj.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.adj.toplot)
-g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj.toplot, label_list2) + ggtitle('Adjusted')
-g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list2)
-# g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Adj")
- # ggsave(g2, width=5, height=2.55, filename = sprintf('figs/%s.adj.pdf', analysis.name))
-hazard.differences.outcomes.proximal.toplot  <-  hazard.differences.outcomes.proximal[c('death.cause.specific'),]
-hazard.differences.outcomes.proximal.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.proximal.toplot)
-g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal.toplot, label_list2) + ggtitle('Proximal')
-g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
- g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Proximal")
- ggsave(g3, width=4, height=2.55, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
-# G  <-  (g1.a/g1.b / g2.a / g2.b/ g3.a / g3.b) + plot_layout(heights = (c(1,2, 1,2, 1,2))) 
-# ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name))
-# G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
-# ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
+# height  <-  2
+# Y.toplot  <-  c('death', 'death.90.day', 'death.other.cause.gt90day', 'death.cause.specific')
+# hazard.differences.outcomes.toplot  <-  hazard.differences.outcomes[Y.toplot,]
+# hazard.differences.outcomes.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.toplot)
+# g1.a  <-  make.HD.plot(hazard.differences.outcomes.toplot, label_list2) + ggtitle('Raw (unadjusted)')
+# g1.b  <-  make.OR.plot(odds.ratios.nocs, label_list2)
+# g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) #+ plot_annotation(title="Raw")
+#  ggsave(g1, width=5, height=2.55, filename = sprintf('figs/%s.raw.pdf', analysis.name))
+# hazard.differences.outcomes.adj.toplot  <-  hazard.differences.outcomes.adj[Y.toplot,]
+# hazard.differences.outcomes.adj.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.adj.toplot)
+# g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj.toplot, label_list2) + ggtitle('Adjusted')
+# g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list2)
+# # g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Adj")
+#  # ggsave(g2, width=5, height=2.55, filename = sprintf('figs/%s.adj.pdf', analysis.name))
+# hazard.differences.outcomes.proximal.toplot  <-  hazard.differences.outcomes.proximal[c('death.cause.specific'),]
+# hazard.differences.outcomes.proximal.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.proximal.toplot)
+# g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal.toplot, label_list2) + ggtitle('Proximal')
+# g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
+#  g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Proximal")
+#  ggsave(g3, width=4, height=2.55, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
+# # G  <-  (g1.a/g1.b / g2.a / g2.b/ g3.a / g3.b) + plot_layout(heights = (c(1,2, 1,2, 1,2))) 
+# # ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name))
+# # G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
+# # ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
 
 
 
@@ -356,143 +298,105 @@ g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
 # Check effect of F 
 ################################
 
-two.step.resid  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, adjust.for.scaled, Y.count = F, verbose = F, resids = NULL){
-    # Stage 1: W1 is non-cause mortality, W2 is the sum of negative control outcomes (excluding the negative outcome of interest)
-    W1  <-  'death.other.cause'
-    A.temp  <-  A.final2 %>% mutate( 
-                                    W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date, units = "days" ), tt)/365,
-                                    W1.bool = ifelse( nna(!!rlang::sym(W1)), T, F),
-                                    W2 = rowSums( ( across( all_of(noc.names.temp)))),
-    )
-    # W1
-    f  <-  sprintf( 'Surv(W1.time, W1.bool) ~ const(tx) +%s+ %s',  
-                   paste(sprintf('const(%s)', Zs), collapse="+"), 
-                   # paste(sprintf('const(tx:%s)', Zs), collapse="+"), 
-                   paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
-    m1  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0, silent = 0 )
-    if (verbose) 
-        print(summary(m1))
-    mm  <-  model.matrix(as.formula(f), A.temp)[,-1] 
-    coefs  <-  as.matrix(coef( m1)[,'Coef.'])
-    negative_outcome_pred1  <-  mm %*% coefs
-    # W2
-    f  <-  sprintf( 'W2 ~ tx + %s + %s + offset(log(time.offset))', 
-                   # f  <-  sprintf( 'W2 ~ tx + %s + %s', 
-                   paste(sprintf('%s', Zs), collapse="+"),  
-                   paste(sprintf('%s', adjust.for.scaled), collapse="+") )
-    m2  <- glm( as.formula(f) , family = quasipoisson(link='log'), data = A.temp)
-    if (verbose) 
-        print(summary(m2))
-    negative_outcome_pred2  <-  predict(m2, type = 'link')
-    A.temp  <-  A.temp %>% mutate( 
-                                  What1 = scale(negative_outcome_pred1[,1]),
-                                  What2 = scale(negative_outcome_pred2)
-    )
-    if (!is.null(resids)) {
-        A.temp$resids  <-  resids
-    }
-    # Stage 2
-    # Poisson for count Ys
-    if (Y.count) {
-        A.temp  <- A.temp %>% mutate( Y.count  = !!rlang::sym(outcome.name),)
-        if (is.null(resids)) {
-            f  <-  sprintf( 'Y.count ~ tx + offset(log(time.offset))  + %s+ What1 + What2',  paste(sprintf('%s', adjust.for.scaled), collapse="+") )
-        } else {
-            f  <-  sprintf( 'Y.count ~ tx + offset(log(time.offset))  + %s+ What1 + What2 + resids',  paste(sprintf('%s', adjust.for.scaled), collapse="+") )
-        }
-        m  <-  glm( f  ,  data = A.temp, family = quasipoisson(link=log))
-        if (verbose) 
-            print(summary(m))
-        if (!is.null(resids)) boot.res  <-  exp(c( coef(m)['resids'] ))
-    }else{
-        # Aalen's for time-to-event Ys
-        A.temp  <- A.temp %>% mutate(
-                                     Y.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
-                                     Y.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
-        )
-        if (is.null(resids)) {
-            f  <-  sprintf( 'Surv(Y.time, Y.bool) ~ const(tx) + const(What1) + const(What2) +  %s',  paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
-        }else {
-            f  <-  sprintf( 'Surv(Y.time, Y.bool) ~ const(tx) + const(What1) + const(What2) +  %s + const(resids)',  paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
-        }
-        m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0, silent = 0)
-        if (verbose) 
-            print(summary(m))
-        if (!is.null(resids)) boot.res  <-  coef(m)['const(resids)', 'Coef.']
-    }
-    if (is.null(resids)) {
-        return(resid(m))
-    }else {
-        return(boot.res)
-    }
-}
+# two.step.resid  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, adjust.for.scaled, Y.count = F, verbose = F, resids = NULL){
+#     # Stage 1: W1 is non-cause mortality, W2 is the sum of negative control outcomes (excluding the negative outcome of interest)
+#     W1  <-  'death.other.cause'
+#     A.temp  <-  A.final2 %>% mutate( 
+#                                     W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date, units = "days" ), tt)/365,
+#                                     W1.bool = ifelse( nna(!!rlang::sym(W1)), T, F),
+#                                     W2 = rowSums( ( across( all_of(noc.names.temp)))),
+#     )
+#     # W1
+#     f  <-  sprintf( 'Surv(W1.time, W1.bool) ~ const(tx) +%s+ %s',  
+#                    paste(sprintf('const(%s)', Zs), collapse="+"), 
+#                    # paste(sprintf('const(tx:%s)', Zs), collapse="+"), 
+#                    paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
+#     m1  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0, silent = 0 )
+#     if (verbose) 
+#         print(summary(m1))
+#     mm  <-  model.matrix(as.formula(f), A.temp)[,-1] 
+#     coefs  <-  as.matrix(coef( m1)[,'Coef.'])
+#     negative_outcome_pred1  <-  mm %*% coefs
+#     # W2
+#     f  <-  sprintf( 'W2 ~ tx + %s + %s + offset(log(time.offset))', 
+#                    # f  <-  sprintf( 'W2 ~ tx + %s + %s', 
+#                    paste(sprintf('%s', Zs), collapse="+"),  
+#                    paste(sprintf('%s', adjust.for.scaled), collapse="+") )
+#     m2  <- glm( as.formula(f) , family = quasipoisson(link='log'), data = A.temp)
+#     if (verbose) 
+#         print(summary(m2))
+#     negative_outcome_pred2  <-  predict(m2, type = 'link')
+#     A.temp  <-  A.temp %>% mutate( 
+#                                   What1 = scale(negative_outcome_pred1[,1]),
+#                                   What2 = scale(negative_outcome_pred2)
+#     )
+#     if (!is.null(resids)) {
+#         A.temp$resids  <-  resids
+#     }
+#     # Stage 2
+#     # Poisson for count Ys
+#     if (Y.count) {
+#         A.temp  <- A.temp %>% mutate( Y.count  = !!rlang::sym(outcome.name),)
+#         if (is.null(resids)) {
+#             f  <-  sprintf( 'Y.count ~ tx + offset(log(time.offset))  + %s+ What1 + What2',  paste(sprintf('%s', adjust.for.scaled), collapse="+") )
+#         } else {
+#             f  <-  sprintf( 'Y.count ~ tx + offset(log(time.offset))  + %s+ What1 + What2 + resids',  paste(sprintf('%s', adjust.for.scaled), collapse="+") )
+#         }
+#         m  <-  glm( f  ,  data = A.temp, family = quasipoisson(link=log))
+#         if (verbose) 
+#             print(summary(m))
+#         if (!is.null(resids)) boot.res  <-  exp(c( coef(m)['resids'] ))
+#     }else{
+#         # Aalen's for time-to-event Ys
+#         A.temp  <- A.temp %>% mutate(
+#                                      Y.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+#                                      Y.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
+#         )
+#         if (is.null(resids)) {
+#             f  <-  sprintf( 'Surv(Y.time, Y.bool) ~ const(tx) + const(What1) + const(What2) +  %s',  paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
+#         }else {
+#             f  <-  sprintf( 'Surv(Y.time, Y.bool) ~ const(tx) + const(What1) + const(What2) +  %s + const(resids)',  paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
+#         }
+#         m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0, silent = 0)
+#         if (verbose) 
+#             print(summary(m))
+#         if (!is.null(resids)) boot.res  <-  coef(m)['const(resids)', 'Coef.']
+#     }
+#     if (is.null(resids)) {
+#         return(resid(m))
+#     }else {
+#         return(boot.res)
+#     }
+# }
 
 
 
-outcome.name  <- 'fall_pre_count'
-noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
-rout  <-  two.step.resid(A.final, Zs,  outcome.name, noc.names.temp, adjust.for.scaled,Y.count =T, verbose=T, resids = NULL)
-outcome.name  <- 'death.cause.specific'
-noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
-mean.out  <-  two.step.resid(A.final, Zs,  outcome.name, noc.count.names, adjust.for.scaled, resids = rout, verbose=T)
-mean.out
-
-est_boot <- parallel::mclapply(1:B, function(bb){
-    A.final2  <-  A.final[sample(nrow(A.final),replace=T ),]
-    outcome.name  <- 'fall_pre_count'
-    noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
-    rout  <-  two.step.resid(A.final2, Zs,  outcome.name, noc.names.temp, adjust.for.scaled,Y.count =T, verbose=F, resids = NULL)
-    outcome.name  <- 'death.cause.specific'
-    noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
-    mout  <-  two.step.resid(A.final2, Zs,  outcome.name, noc.count.names, adjust.for.scaled, resids = rout, verbose=F)
-    return(mout)
-}, mc.cores =8)
-se  <-  sd(unlist(lapply(est_boot, function(x) x[1])))
-c( mean.out, mean.out - 1.96*se, mean.out + 1.96*se )
-
-
-
-
-
+# outcome.name  <- 'fall_pre_count'
+# noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
+# rout  <-  two.step.resid(A.final, Zs,  outcome.name, noc.names.temp, adjust.for.scaled,Y.count =T, verbose=T, resids = NULL)
+# outcome.name  <- 'death.cause.specific'
+# noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
+# mean.out  <-  two.step.resid(A.final, Zs,  outcome.name, noc.count.names, adjust.for.scaled, resids = rout, verbose=T)
+# mean.out
 
 # est_boot <- parallel::mclapply(1:B, function(bb){
 #     A.final2  <-  A.final[sample(nrow(A.final),replace=T ),]
-#     boot.res  <-  two.step(A.final2, Zs,  outcome.name, noc.names.temp,adjust.for.scaled, Y.count=T, verbose=F)
-#     return(boot.res)
+#     outcome.name  <- 'fall_pre_count'
+#     noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
+#     rout  <-  two.step.resid(A.final2, Zs,  outcome.name, noc.names.temp, adjust.for.scaled,Y.count =T, verbose=F, resids = NULL)
+#     outcome.name  <- 'death.cause.specific'
+#     noc.names.temp  <- setdiff( noc.count.names, c(outcome.name))
+#     mout  <-  two.step.resid(A.final2, Zs,  outcome.name, noc.count.names, adjust.for.scaled, resids = rout, verbose=F)
+#     return(mout)
 # }, mc.cores =8)
 # se  <-  sd(unlist(lapply(est_boot, function(x) x[1])))
-# odds.ratios.nocs.proximal[outcome.i,1:3]  <-  c( mout[1], mout[1] - 1.96*se, mout[1] + 1.96*se )
-# print(odds.ratios.nocs.proximal[outcome.i,1:3])
+# c( mean.out, mean.out - 1.96*se, mean.out + 1.96*se )
 
 
 
 
-#################################
-## Assess quality of our negative outcomes 
-#################################
 
-# noc.i  <-  7
-# for (noc.i in 1:length(noc.pre.count.names)){ 
-#     noc.name  <-  noc.pre.count.names[noc.i]
-#     # noc.name  <-  noc.count.names[noc.i]
-#     # noc.name  <-  noc.post.count.names[noc.i]
-#     Y  <-  'death'
-#     A.temp  <-  A.final %>% mutate( 
-#                           outcome.time  = if_else (nna(!!rlang::sym(Y)), as.numeric( !!rlang::sym(Y) - tx.date, units = "days" ), tt)/ 365,
-#                           outcome.bool = ifelse( nna(!!rlang::sym(Y)), T, F),
-#                           noc = !!rlang::sym(noc.name)/pre.tx.days
-#                            # noc = !!rlang::sym(noc.name)/time.offset
-#                             # noc = !!rlang::sym(noc.name)/time.enrolled
-#         )
-#     # Raw
-#     m  <-  aalen( Surv(outcome.time, outcome.bool) ~ const(noc) +treatment.year_z,  data = A.temp, robust = 0)
-#     print(noc.name)
-#     print( c( coef(m)['const(noc)', c('Coef.', 'lower2.5%', 'upper97.5%')]) )
-#     # Adjust for X
-#     f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(noc) + %s',  paste(sprintf('const(%s)', adjust.for.scaled), collapse="+") )
-#     m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
-#     print( c( coef(m)['const(noc)', c('Coef.', 'lower2.5%', 'upper97.5%')]) )
-# }
+
 
 
 #################################
@@ -570,27 +474,3 @@ c( mean.out, mean.out - 1.96*se, mean.out + 1.96*se )
 #    se  <-  sd(unlist(lapply(est_boot, function(x) x[1])))
 #    print(c( mout[1], mout[1] - 1.96*se, mout[1] + 1.96*se ))
 
-#    ################################
-#  Old   # 
-#    ################################
-
-#var(A.temp$outcome.count)
-#mean(A.temp$outcome.count)
-
-#f  <-  sprintf( 'outcome.count ~ tx + offset(log(time.enrolled))  + %s',  paste(sprintf('%s', adjust.for.scaled), collapse="+") )
-#m  <-  MASS::glm.nb( f  ,  data = A.temp)
-#point.est  <-  coef(m)['txsbrt']
-#ci  <-  confint(m)['txsbrt',]
-
-#est_boot <- parallel::mclapply(1:B, function(bb){
-#    A.temp2  <-  A.temp[sample(nrow(A.temp),replace=T ),]
-#    # print(table( A.temp2$pancreatic_pre_count > 0, useNA="ifany"))
-#    m  <-  MASS::glm.nb( f  ,  data = A.temp2)
-#    return(coef(m)['txsbrt'])
-#}, mc.cores =8)
-#se  <-  sd(unlist(lapply(est_boot, function(x) x[1])))
-#ci2 <-  c( point.est - 1.96*se, point.est + 1.96*se )
-#print(ci)
-#print(ci2)
-# Get number of non-zero values for each X.numeric variable
-# A.final %>% select(all_of(X.numeric)) %>% summarise_all(list(~sum(. > 0, na.rm = T))) %>% t() %>% as.data.frame() %>% arrange(desc(V1))
