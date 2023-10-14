@@ -7,7 +7,9 @@ library(tidyverse)
 # added manually
 ################################
 
+# This file seems to only have DME
 CPT_Codes  <-  read_csv('CPT_Codes_2020.csv') %>% rename(HCPC=`HCPC/MOD`, short_desc = `SHORT DESCRIPTION`, long_desc=`LONG DESCRIPTION`) %>% select( HCPC, long_desc)
+CPT_Codes_2  <-  read_csv('CPT_Codes_2.csv') %>% select( HCPC, long_desc)
 deprecated.codes  <- do.call (rbind, list(c('77373', 'Under Stereotactic Radiation Treatment Delivery'),
             c('61793'  ,'Stereotactic radiosurgery (particle beam, gamma ray or linear accelerator), one or more sessions'),
             c('0082T', 'Stereotactic rad delivery') ))
@@ -165,6 +167,9 @@ dx.icd   <- list (
      'acute_bronchitis' = list(
         'icd9'=c('4660', '4661'),
         'icd10' =  sprintf('J20%d',0:9)),
+     'interstitial_lung' = list(
+        'icd9' = c( expand_range('5163', '51669'), '515'),
+        'icd10' =  expand_range( 'J84', 'J849')),
      'oral' = list(
         'icd9' = expand_range('520','5299'),
         'icd10' =  expand_range('K00', 'K149')),
@@ -189,9 +194,9 @@ dx.icd   <- list (
      'hemorrhoids' = list(
         'icd9' = c( expand_range('4550', '4559')     ) ,
         'icd10' =  expand_range('K640', 'K649')     ),
-      'optho' = list(
-         'icd9' = setdiff( expand_range('360', '379'), c( '37601', '37603' )) ,
-         'icd10' =  setdiff( expand_range('H00', 'H59'),   expand_range('H0501', ' H0502')))     ,
+      # 'optho' = list(
+      #    'icd9' = setdiff( expand_range('360', '379'), c( '37601', '37603' )) ,
+      #    'icd10' =  setdiff( expand_range('H00', 'H59'),   expand_range('H0501', ' H0502')))     ,
      'optho2' = list(
         'icd9' = c( 
                 expand_range('362', '36218'),  # Diabetic, hypertensive, and other retinopathy
@@ -237,6 +242,9 @@ dx.icd   <- list (
      'dementia' = list(
         'icd9' = expand.each.code(c('290','2941','3312')),
         'icd10' =  expand.each.code(c('F01','F02','F03','G30','G311'))),# removed F00*
+     'asthma' = list( 
+        'icd9' = expand_range('493', '49392'),
+        'icd10' = expand_range('J45', 'J45998')),
      'COPD' = list(
         'icd9' = expand.each.code(c('4168','4169','490','491','492','493','494','495','496','500','501','502','503','504','505','5064','5081','5088')),
         'icd10' =  expand.each.code(c('J40','J41','J42','J43','J44','J45','J46','J47', 'J60','J61','J62','J63','J64','J65','J66','J67', 'I278','I279','J684','J701','J703'))),
@@ -283,23 +291,25 @@ dx.icd  <- c( dx.icd,
      'nervous_system' = list(
         'icd9' = setdiff( expand_range( '320', '359'), c(dx.icd[['PARA']]$icd9,  dx.icd[['CVD']]$icd9,  dx.icd[['dementia']]$icd9  )),
         'icd10' =setdiff( expand_range('G00', 'G99'),c(  dx.icd[['PARA']]$icd10, dx.icd[['CVD']]$icd10, dx.icd[['dementia']]$icd10 )) ),
-     'other_heart_disease' = list(
-        'icd9' = setdiff ( expand_range( '390', '429'), 
-                          c( dx.icd[['RD']]$icd9,dx.icd[['CHF']]$icd9,dx.icd[['ischemic_heart_disease']]$icd9 , dx.icd[['COPD']]$icd9)  ),
-        'icd10' =setdiff ( expand_range('I00','I52'),  
-                          c( dx.icd[['RD']]$icd10,dx.icd[['CHF']]$icd10 , dx.icd[['ischemic_heart_disease']]$icd10, dx.icd[['COPD']]$icd10  ))
-     ),
-     'veins_lymphatics_other_circulatory' = list(
-        'icd9' = setdiff(  c(expand_range( '451', '459')), c (  dx.icd[['MSLD']]$icd9, dx.icd[['hemorrhoids']]$icd9 )),
-        'icd10' =setdiff(  c( expand.each.code(c( 'I80',  'I86', 'I89', 'I95', 'I99', 'K64')), expand_range('I81', 'I83') ),  c (  dx.icd[['MSLD']]$icd10,dx.icd[['hemorrhoids']]$icd10) )
-     ),
+     # 'other_heart_disease' = list(
+     #    'icd9' = setdiff ( expand_range( '390', '429'), 
+     #                      c( dx.icd[['RD']]$icd9,dx.icd[['CHF']]$icd9,dx.icd[['ischemic_heart_disease']]$icd9 , dx.icd[['COPD']]$icd9)  ),
+     #    'icd10' =setdiff ( expand_range('I00','I52'),  
+     #                      c( dx.icd[['RD']]$icd10,dx.icd[['CHF']]$icd10 , dx.icd[['ischemic_heart_disease']]$icd10, dx.icd[['COPD']]$icd10  ))
+     # ),
+     # 'veins_lymphatics_other_circulatory' = list(
+     #    'icd9' = setdiff(  c(expand_range( '451', '459')), c (  dx.icd[['MSLD']]$icd9, dx.icd[['hemorrhoids']]$icd9 )),
+     #    'icd10' =setdiff(  c( expand.each.code(c( 'I80',  'I86', 'I89', 'I95', 'I99', 'K64')), expand_range('I81', 'I83') ),  c (  dx.icd[['MSLD']]$icd10,dx.icd[['hemorrhoids']]$icd10) )
+     # ),
      'rheum' = list(
         'icd9' = setdiff( expand.each.code(c('4465','7100','7101','7102','7103','7104','7140','7141','7142','7148','725')),
                          dx.icd[['arthropathy']]$icd9),
         'icd10' =  setdiff(
-                           expand.each.code(c('M05','M32','M33','M34','M06','M315','M351','M353','M360')),
-                          dx.icd[['arthropathy']]$icd10 ))
-     ))
+                           expand.each.code(c('M05','M32','M33','M34','M06','M315','M351','M353','M360')), dx.icd[['arthropathy']]$icd10 ))
+    # 'other_lung' = list(
+    #                        'icd9' = setdiff( expand_range('460', '519'),   c( dx.icd[['pneumonia_and_influenza']]$icd9, dx.icd[['COPD']]$icd9, dx.icd[['acute_bronchitis']]$icd9)) ,
+    #                        'icd10' =  setdiff( expand_range('J00', 'J99'),   c( dx.icd[['pneumonia_and_influenza']]$icd10, dx.icd[['COPD']]$icd10, dx.icd[['acute_bronchitis']]$icd10)))    
+      ))
 
 
 # check for duplicates
@@ -318,7 +328,9 @@ procs  <- list (
             'other_supplies' =  expand_range_procs ( 'A4244', 'A4290', CPT_Codes),
             'diabetic_footwear' =  expand_range_procs ( 'A5500', 'A5513', CPT_Codes),
             'transportation_services' =  expand_range_procs ( 'A0021', 'A0999', CPT_Codes),
-            'chemotherapy' = expand_range_procs ('J9000', 'J9999', CPT_Codes)
+            'chemotherapy' = expand_range_procs ('J9000', 'J9999', CPT_Codes),
+            'echo' = c('93303', '93304', '93306', '93307', '93308' ),
+            'dialysis' = c('90935', '90937', '90940')
                 )
 
 
@@ -343,7 +355,7 @@ sink()
 sink('tbls/proc.codes.txt'); 
 for (namei in names(procs)) { 
     cat(sprintf('Variable Name: %s', namei))
-    CPT_Codes %>% filter (HCPC %in% procs[[namei]] ) %>% select(HCPC, long_desc) %>% print(n=Inf)
+    CPT_Codes %>% rbind( CPT_Codes_2)  %>% distinct(HCPC, .keep_all =T) %>% filter (HCPC %in% procs[[namei]] ) %>% select(HCPC, long_desc) %>% print(n=Inf)
     cat('------------------------------\n\n\n\n')
 } 
 sink()
