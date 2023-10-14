@@ -11,56 +11,71 @@ library(ggplot2)
 source('utilities.R')
 set.seed(3)
 
+#################################
+## delete 
+#################################
+#A.final.old.rec  <-  readRDS('data/A.final10.all.gte.65_old_recreate.RDS')
+#A.final.old  <-  readRDS('data/A.final8.all.gte.65_old.RDS') %>% filter (tx %in% c('sbrt', 'sublobar'))
+
+#ids  <- which(!A.final.old$PATIENT_ID %in% A.final.old.rec$PATIENT_ID)
+#ids
+#A.final.old[ids[1],] %>% glimpse
+
+
 ################################
 # Load data 
 ################################
-subset.name <- 'all.gte.65'
-# subset.name <- 'all.gte.65.sens1'
+ subset.name <- 'all.gte.65'
+ # subset.name <- 'all.gte.65_old_recreate'
+ # subset.name <- 'all.gte.65_old'
+ # subset.name <- 'sens1'
 
-filename.in  <-  sprintf('data/A.final7.%s.RDS', subset.name)
+filename.in  <-  sprintf('data/A.final20.%s.RDS', subset.name)
 A.final  <-  readRDS(filename.in)  %>% 
     mutate(treatment.year = year(tx.date),
             death.90.day = if_else ( ninety.day.mortality, death, as.Date(NA_character_)),
             death.cause.specific = if_else ( cause.specific.mortality == 'Death', death, as.Date(NA_character_)),
             death.other.cause = if_else ( other.cause.mortality == 'Death', death, as.Date(NA_character_)),
             death.other.cause.gt90day = if_else ( other.cause.mortality == 'Death' & tt > 90, death, as.Date(NA_character_)),
-            pre.tx.days = pre.tx.months * 30.5
+            pre.tx.days = pre.tx.months * 30.5,
     )
-
-A.final %>% filter ( nna(death.other.cause ) ) %>% select(tt) %>% table()   
-table ( nna(A.final$death.other.cause) , nna(A.final$death.other.cause.gt90day), useNA="ifany")
+table( A.final$tx, useNA="ifany")
 
 # Define the analysis
-# analysis.name  <-  'pre.gt65.sublobarvsbrt'
-# analysis.name  <-  'pre.gt65.surgeryvsbrt'
-# analysis.name  <-  'any.80to90.allsurgery'
-# analysis.name  <-  'any.gt65.sublobarvsbrt.noadjpersontime'
-analysis.name  <-  'any.gt65.sublobarvsbrt.adjpersontime'
- # analysis.name  <-  'pre.gt65.sublobarvsbrt.adjpersontime.sens1'
-# analysis.name  <-  'any.gt65.sublobarvsbrt'
-# analysis.name  <-  'any.gt65.sublobarvsbrt.w1only'
-A.final  <-  A.final %>% 
-     filter(age >= 65) %>%
-     filter ( tx %in% c('sbrt', 'sublobar') )
-    # filter(age >= 80 & age <=90) %>%
-    # mutate(tx = factor(case_when( tx == 'sbrt' ~ 'sbrt', tx == 'sublobar' | tx == 'lobar' ~ 'surgery'), levels = c('surgery', 'sbrt')))
+ analysis.name  <-  'gte65'
+ analysis.name  <-  'gte65.microscopically.confirmed'
+ analysis.name  <-  '65.80.microscopically.confirmed'
+ analysis.name  <-  'primary'
+ # analysis.name  <-  'primary.65.80'
+ # analysis.name  <-  'gte65.sens1'
+  # analysis.name  <-  'gte65.extendedX'
+ # A.final  <-  A.final %>% 
+  # filter(age >= 65 & age <= 80) 
+  # filter ( tx %in% c('sbrt', 'sublobar') )
+# mutate(tx = factor(case_when( tx == 'sbrt' ~ 'sbrt', tx == 'sublobar' | tx == 'lobar' ~ 'surgery'), levels = c('surgery', 'sbrt')))
 A.final$tx  <-  droplevels(A.final$tx)
-table( A.final$tx, useNA="ifany")
+# A.final %>% filter (tx == 'sublobar') %>% count(tnm.n)
+A.final %>% filter (tx == 'sublobar') %>% group_by(tnm.n >0) %>% summarise(n = n()) %>% mutate( freq = n / sum(n) )
+# table( A.final$dialysis_pre_count, useNA="ifany")
+# table( A.final$histology, useNA="ifany")
 
 
 # Define X
-X.factor  <-  c('t_stage_8','sex', 'race', 'marital.status', 'histology' ) 
-X.numeric  <-  c('age', 'treatment.year', sprintf('%s_pre_count', c(
+# X.factor  <-  c('t_stage_8','sex', 'race', 'marital.status', 'histology' ) 
+ X.factor  <-  c('sex', 'race', 'marital.status', 'histology' ) 
+X.numeric  <-  c('age', 'size', 'treatment.year', sprintf('%s_pre_count', c(
                      # DMEs
                        # 'hospital_beds_and_supplies', 'wheelchairs_accessories', 'walking_aids', 'O2accessories', 'other_supplies', 'diabetic_footwear', 'transportation_services', 
                      # Diagnoses
-                        'smoking', 'o2', 'other_bacterial_diseases', 'pneumonia_and_influenza', 'pressure_ulcer', 'ischemic_heart_disease', 'CHF', 'PVD', 'CVD', 'dementia', 'COPD', 'PUD', 'MILDLD', 'DIAB_UC', 'DIAB_C', 'PARA', 'RD', 'cancer_nonlung', 'MSLD', 'METS',  'mental_disorders', 'nervous_system', 'other_heart_disease', 'veins_lymphatics_other_circulatory', 'rheum',
+                        # 'smoking', 'o2', 'other_bacterial_diseases', 'pneumonia_and_influenza', 'pressure_ulcer', 'ischemic_heart_disease', 'CHF','other_heart_disease', 'PVD', 'CVD', 'dementia', 'COPD','other_lung', 'PUD', 'MILDLD', 'DIAB_UC', 'DIAB_C', 'PARA', 'RD',  'MSLD',   'mental_disorders', 'nervous_system',  'veins_lymphatics_other_circulatory', 'rheum', 'dialysis', 'echo',
+                        'smoking', 'o2',  'pneumonia_and_influenza','asthma', 'COPD','interstitial_lung', 'pressure_ulcer', 'ischemic_heart_disease', 'CHF', 'PVD', 'CVD', 'dementia',   'MILDLD','MSLD', 'DIAB_UC', 'DIAB_C',  'RD', 'mental_disorders', 'nervous_system',   'dialysis', 'echo',
                      # Drugs
                      'Insulin', 'Anticoags')
                          )) 
 X.factor.min  <-  c('t_stage_8','sex', 'race',  'histology' ) 
-X.numeric.min  <-  c('age', 'treatment.year', sprintf('%s_pre_count', c( 'smoking', 'o2',  'ischemic_heart_disease', 'CHF', 'dementia', 'COPD', 'DIAB_C', 'cancer_nonlung', 'MSLD', 'METS'))) 
-adjust.for.scaled  <-  ( c(sprintf('%s_z', X.numeric.min), X.factor.min) )  # To use full set, change to X.factor and X.numeric
+X.numeric.min  <-  c('age', 'treatment.year', sprintf('%s_pre_count', c( 'smoking', 'o2',  'ischemic_heart_disease', 'CHF', 'other_heart_disease',  'echo','dialysis', 'dementia', 'COPD', 'other_lung', 'DIAB_C',  'MSLD'))) 
+# adjust.for.scaled  <-  ( c(sprintf('%s_z', X.numeric.min), X.factor.min) )  # To use full set, change to X.factor and X.numeric
+adjust.for.scaled  <-  ( c(sprintf('%s_z', X.numeric), X.factor) )  # To use full set, change to X.factor and X.numeric
 
 
 negative.exposures  <- c('O2accessories', 'walking_aids' , 'hospital_beds_and_supplies' , 'wheelchairs_accessories' , 'transportation_services', 'other_supplies', 'diabetic_footwear' )
@@ -103,13 +118,13 @@ A.final  <- A.final %>% mutate(
 # Table 1 
 ################################
 Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/Resources/app/quarto/bin/tools")
-
+names(label_list)[names(label_list) %in% c(X.numeric, X.factor)]
 library(arsenal)
 tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
-f  <-  sprintf( 'tx ~ %s', paste( names(label_list), collapse = "+") )
+f  <-  sprintf( 'tx ~ %s', paste( c(X.numeric, X.factor), collapse = "+"))
 labels(A.final)  <-  label_list
 tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
-summary(tt) %>% write2html('/Users/george/Research_Local/SEER-Medicare/tbls/table1.htm')
+summary(tt) %>% write2html(sprintf('/Users/george/Research_Local/SEER-Medicare/tbls/table1_2_%s.htm', analysis.name))
 
 
 ##################################
@@ -270,9 +285,13 @@ for (outcome.i in 1:length(noc.count.names)){
 }
 
 
+A.temp %>% count(tx)
 ################################
 # Individual plots
 ################################
+saveRDS(hazard.differences.outcomes, sprintf('data/%s.hazard.differences.outcomes.rds', analysis.name))
+saveRDS(hazard.differences.outcomes.adj, sprintf('data/%s.hazard.differences.outcomes.adj.rds', analysis.name))
+saveRDS(hazard.differences.outcomes.proximal, sprintf('data/%s.hazard.differences.outcomes.proximal.rds', analysis.name))
 
 height  <-  2
 Y.toplot  <-  c('death', 'death.90.day', 'death.other.cause.gt90day', 'death.cause.specific')
@@ -282,15 +301,12 @@ g1.a  <-  make.HD.plot(hazard.differences.outcomes.toplot, label_list2)
 g1.b  <-  make.OR.plot(odds.ratios.nocs, label_list2)
 g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) + plot_annotation(title="Raw (Unadjusted)")
 ggsave(g1, width=6, height=2.65, filename = sprintf('figs/%s.raw.pdf', analysis.name))
-
-
 hazard.differences.outcomes.adj.toplot  <-  hazard.differences.outcomes.adj[Y.toplot,]
 hazard.differences.outcomes.adj.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.adj.toplot)
 g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj.toplot, label_list2)
 g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list2)
  g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))+ plot_annotation(title="Adjusted")
  ggsave(g2, width=6, height=2.65, filename = sprintf('figs/%s.adj.pdf', analysis.name))
-
 hazard.differences.outcomes.proximal.toplot  <-  hazard.differences.outcomes.proximal[c('death.cause.specific'),]
 hazard.differences.outcomes.proximal.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.proximal.toplot)
 g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal.toplot, label_list2)
@@ -298,10 +314,10 @@ g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
  g3  <-  g3.a / g3.b + plot_layout(heights = (c(0.25,height)))+ plot_annotation(title="Proximal")
 ggsave(g3, width=6, height=2.65, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
 
-G  <-  (g1.a/g1.b / g2.a / g2.b/ g3.a / g3.b) + plot_layout(heights = (c(1,2, 1,2, 1,2))) 
-ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name))
-G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
-ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
+# G  <-  (g1.a/g1.b / g2.a / g2.b/ g3.a / g3.b) + plot_layout(heights = (c(1,2, 1,2, 1,2))) 
+# ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name))
+# G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
+# ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
 
 
 
@@ -327,12 +343,12 @@ hazard.differences.outcomes.proximal.toplot  <-  hazard.differences.outcomes.pro
 hazard.differences.outcomes.proximal.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.proximal.toplot)
 g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal.toplot, label_list2) + ggtitle('Proximal')
 g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
-# g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Proximal")
- # ggsave(g3, width=4, height=2.55, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
-G  <-  (g1.a/g1.b / g2.a / g2.b/ g3.a / g3.b) + plot_layout(heights = (c(1,2, 1,2, 1,2))) 
-ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name))
-G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
-ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
+ g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Proximal")
+ ggsave(g3, width=4, height=2.55, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
+# G  <-  (g1.a/g1.b / g2.a / g2.b/ g3.a / g3.b) + plot_layout(heights = (c(1,2, 1,2, 1,2))) 
+# ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name))
+# G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
+# ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
 
 
 

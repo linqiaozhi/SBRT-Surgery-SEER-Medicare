@@ -4,8 +4,9 @@ label_list  <-  list(
                      age = 'Age',
                      sex = 'Male Sex',
                      race = 'Race',
+                     size = 'Size',
                      marital.status = 'Marital status',
-                     histology =  'Histology Simple',
+                     histology =  'Histology',
                      t_stage_8 = 'T stage 8th edition',
                      treatment.year = 'Treatment year',
                      smoking_pre_count = 'Smoking',
@@ -15,23 +16,31 @@ label_list  <-  list(
                      pressure_ulcer_pre_count = 'Pressure ulcer',
                      ischemic_heart_disease_pre_count = 'Ischemic heart disease',
                      CHF_pre_count = 'Congestive heart failure',
+                     other_heart_disease_pre_count = 'Other heart disease',
                      PVD_pre_count = 'Peripheral vascular disease',
                      CVD_pre_count = 'Cerebrovascular disease',
                      dementia_pre_count = 'Dementia',
                      COPD_pre_count = 'Chronic obstructive pulmonary disease',
+                     asthma_pre_count = 'Asthma',
+                     interstitial_lung_pre_count = 'Interstitial lung disease',
+                     other_lung_pre_count = 'Other lung disease',
                      PUD_pre_count = 'Peptic ulcer disease',
                      MILDLD_pre_count = 'Mild liver disease',
-                     DIAB_UC_pre_count = 'Uncomplicated diabetes',
-                     PARA_pre_count = 'Paralysis',
-                     RD_pre_count = 'Renal disease',
-                     cancer_nonlung_pre_count = 'Cancer (non-lung)',
                      MSLD_pre_count = 'Moderate or severe liver disease',
-                     METS_pre_count = 'Metastatic disease',
+                     DIAB_UC_pre_count = 'Uncomplicated diabetes',
+                     DIAB_C_pre_count = 'Uncomplicated diabetes',
+                     # PARA_pre_count = 'Paralysis',
+                     RD_pre_count = 'Renal disease',
+                     # cancer_nonlung_pre_count = 'Cancer (non-lung)',
+                     # METS_pre_count = 'Metastatic disease',
                      mental_disorders_pre_count = 'Mental disorders',
                      nervous_system_pre_count = 'Neurological disorders',
-                     other_heart_disease_pre_count = 'Other heart disease',
-                     veins_lymphatics_other_circulatory_pre_count = 'Veins, lymphatics, other circulatory',
-                     rheum_pre_count = 'Rheumatologic diseases',
+                     # veins_lymphatics_other_circulatory_pre_count = 'Veins, lymphatics, other circulatory',
+                     dialysis_pre_count = 'Dialysis',
+                     echo_pre_count = 'Echocardiogram',
+                     # rheum_pre_count = 'Rheumatologic diseases',
+                     Insulin_pre_count = 'Insulin',
+                     Anticoags_pre_count = 'Anticoagulation',
                      # Z
                      O2accessories_pre_count = 'Oxygen accessories',
                      walking_aids_pre_count = 'Walking aids',
@@ -131,7 +140,7 @@ get.dates.of.dx  <-  function( A, proc.codes ) {
 
 
 make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
-    xlims <- c(0.7, 3)
+    xlims <- c(0.45, 3)
     tt  <-  ifelse (hazard, 'Hazard Ratio (log scale)', 'Hazard Ratio (log scale)')
     # row.names(odds.ratios_) <- gsub("_pre_count", "", row.names(odds.ratios_))
      row.names(odds.ratios_) <- gsub("_..._count", "",  row.names(odds.ratios_))
