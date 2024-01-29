@@ -4,59 +4,61 @@ label_list  <-  list(
                      age = 'Age',
                      sex = 'Male Sex',
                      race = 'Race',
-                     size = 'Size',
+                     size = 'Tumor size',
                      marital.status = 'Marital status',
                      histology =  'Histology',
+                     histology2 =  'Squamous cell histology',
                      t_stage_8 = 'T stage 8th edition',
                      treatment.year = 'Treatment year',
-                     smoking_pre_count = 'Smoking',
-                     o2_pre_count = 'Oxygen',
-                     pneumonia_and_influenza_pre_count = 'Pneumonia and influenza',
-                     other_bacterial_diseases_pre_count = 'Other bacterial diseases',
-                     pressure_ulcer_pre_count = 'Pressure ulcer',
-                     ischemic_heart_disease_pre_count = 'Ischemic heart disease',
-                     CHF_pre_count = 'Congestive heart failure',
-                     other_heart_disease_pre_count = 'Other heart disease',
-                     PVD_pre_count = 'Peripheral vascular disease',
-                     CVD_pre_count = 'Cerebrovascular disease',
-                     dementia_pre_count = 'Dementia',
-                     COPD_pre_count = 'Chronic obstructive pulmonary disease',
-                     asthma_pre_count = 'Asthma',
-                     interstitial_lung_pre_count = 'Interstitial lung disease',
-                     other_lung_pre_count = 'Other lung disease',
-                     PUD_pre_count = 'Peptic ulcer disease',
-                     MILDLD_pre_count = 'Mild liver disease',
-                     MSLD_pre_count = 'Moderate or severe liver disease',
-                     DIAB_UC_pre_count = 'Uncomplicated diabetes',
-                     DIAB_C_pre_count = 'Uncomplicated diabetes',
-                     # PARA_pre_count = 'Paralysis',
-                     RD_pre_count = 'Renal disease',
-                     # cancer_nonlung_pre_count = 'Cancer (non-lung)',
-                     # METS_pre_count = 'Metastatic disease',
-                     mental_disorders_pre_count = 'Mental disorders',
-                     nervous_system_pre_count = 'Neurological disorders',
-                     # veins_lymphatics_other_circulatory_pre_count = 'Veins, lymphatics, other circulatory',
-                     dialysis_pre_count = 'Dialysis',
-                     echo_pre_count = 'Echocardiogram',
-                     # rheum_pre_count = 'Rheumatologic diseases',
-                     Insulin_pre_count = 'Insulin',
-                     Anticoags_pre_count = 'Anticoagulation',
+                     treatment.year2 = 'Treatment year',
+                     smoking_pre_month_count_unbinned = 'Smoking',
+                     o2_pre_month_count_unbinned = 'Oxygen',
+                     pneumonia_and_influenza_pre_month_count_unbinned = 'Pneumonia and influenza',
+                     other_bacterial_diseases_pre_month_count_unbinned = 'Other bacterial diseases',
+                     pressure_ulcer_pre_month_count_unbinned = 'Pressure ulcer',
+                     ischemic_heart_disease_pre_month_count_unbinned = 'Ischemic heart disease',
+                     CHF_pre_month_count_unbinned = 'Congestive heart failure',
+                     other_heart_disease_pre_month_count_unbinned = 'Other heart disease',
+                     PVD_pre_month_count_unbinned = 'Peripheral vascular disease',
+                     CVD_pre_month_count_unbinned = 'Cerebrovascular disease',
+                     dementia_pre_month_count_unbinned = 'Dementia',
+                     COPD_pre_month_count_unbinned = 'Chronic obstructive pulmonary disease',
+                     asthma_pre_month_count_unbinned = 'Asthma',
+                     interstitial_lung_pre_month_count_unbinned = 'Interstitial lung disease',
+                     other_lung_pre_month_count_unbinned = 'Other lung disease',
+                     PUD_pre_month_count_unbinned = 'Peptic ulcer disease',
+                     MILDLD_pre_month_count_unbinned = 'Mild liver disease',
+                     MSLD_pre_month_count_unbinned = 'Moderate or severe liver disease',
+                     DIAB_UC_pre_month_count_unbinned = 'Uncomplicated diabetes',
+                     DIAB_C_pre_month_count_unbinned = 'Complicated diabetes',
+                     # PARA_pre_month_count_unbinned = 'Paralysis',
+                     RD_pre_month_count_unbinned = 'Renal disease',
+                     # cancer_nonlung_pre_month_count_unbinned = 'Cancer (non-lung)',
+                     # METS_pre_month_count_unbinned = 'Metastatic disease',
+                     mental_disorders_pre_month_count_unbinned = 'Mental disorders',
+                     nervous_system_pre_month_count_unbinned = 'Neurological disorders',
+                     # veins_lymphatics_other_circulatory_pre_month_count_unbinned = 'Veins, lymphatics, other circulatory',
+                     dialysis_pre_month_count_unbinned = 'Dialysis',
+                     echo_pre_month_count_unbinned = 'Echocardiogram',
+                     # rheum_pre_month_count_unbinned = 'Rheumatologic diseases',
+                     Insulin_pre_month_count_unbinned = 'Insulin',
+                     Anticoags_pre_month_count_unbinned = 'Anticoagulation',
                      # Z
-                     O2accessories_pre_count = 'Oxygen accessories',
-                     walking_aids_pre_count = 'Walking aids',
-                     hospital_beds_and_supplies_pre_count = 'Hospital beds and supplies',
-                     wheelchairs_accessories_pre_count = 'Wheelchairs and accessories',
-                     transportation_services_pre_count = 'Transportation services',
-                     other_supplies_pre_count = 'Other supplies',
-                     diabetic_footwear_pre_count = 'Diabetic footwear',
+                     O2accessories_pre_month_count_unbinned = 'Oxygen accessories',
+                     walking_aids_pre_month_count_unbinned = 'Walking aids',
+                     hospital_beds_and_supplies_pre_month_count_unbinned = 'Hospital beds and supplies',
+                     wheelchairs_accessories_pre_month_count_unbinned = 'Wheelchairs and accessories',
+                     transportation_services_pre_month_count_unbinned = 'Transportation services',
+                     other_supplies_pre_month_count_unbinned = 'Other supplies',
+                     diabetic_footwear_pre_month_count_unbinned = 'Diabetic footwear',
                      # W
-                     fall_pre_count = 'Fall',
-                     other_injury_pre_count = 'Other injury',
-                     diverticular_disease_pre_count = 'Diverticular disease',
-                     hernia_pre_count = 'Hernia',
-                     arthropathy_pre_count = 'Arthropathy',
-                     GU_sx_pre_count = 'Genitourinary symptoms',
-                     optho2_pre_count = 'Ophthalmologic disease'
+                     fall_pre_month_count_unbinned = 'Fall',
+                     other_injury_pre_month_count_unbinned = 'Other injury',
+                     diverticular_disease_pre_month_count_unbinned = 'Diverticular disease',
+                     hernia_pre_month_count_unbinned = 'Hernia',
+                     arthropathy_pre_month_count_unbinned = 'Arthropathy',
+                     GU_sx_pre_month_count_unbinned = 'Genitourinary symptoms',
+                     optho2_pre_month_count_unbinned = 'Ophthalmologic disease'
                      # other.cause.mortality = 'Other cause mortality',
                      # cause.specific.mortality = 'Cause specific mortality',
                      # primary.site = 'Primary site',
@@ -142,7 +144,7 @@ get.dates.of.dx  <-  function( A, proc.codes ) {
 make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
     xlims <- c(0.45, 3)
     tt  <-  ifelse (hazard, 'Hazard Ratio (log scale)', 'Hazard Ratio (log scale)')
-    # row.names(odds.ratios_) <- gsub("_pre_count", "", row.names(odds.ratios_))
+    # row.names(odds.ratios_) <- gsub("_pre_month_count", "", row.names(odds.ratios_))
      row.names(odds.ratios_) <- gsub("_..._count", "",  row.names(odds.ratios_))
     g <- ggplot(odds.ratios_, aes(x = estimate, y=y_axis)) + 
         geom_vline(aes(xintercept = 1), size = 0.25, linetype = "dashed") +
@@ -168,7 +170,7 @@ make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
  g
 }
 
-make.HD.plot  <-  function (odds.ratios_, label_list2, hazard =F, xlims = c(-0.05,0.15)) {
+make.HD.plot  <-  function (odds.ratios_, label_list2, hazard =F, xlims = c(-0.05,0.15), breaks=c(-0.05,0.025,0, 0.05,0.1, 0.15)) {
     tt  <-  'Hazard Difference'
     g <- ggplot(odds.ratios_, aes(x = estimate, y=y_axis)) + 
         geom_vline(aes(xintercept = 0), size = 0.25, linetype = "dashed") +
@@ -177,7 +179,7 @@ make.HD.plot  <-  function (odds.ratios_, label_list2, hazard =F, xlims = c(-0.0
         theme_bw() +
         theme(panel.grid.minor = element_blank()) +
         scale_y_continuous(breaks = 1:max(odds.ratios_$y_axis), labels = label_list2[row.names(odds.ratios_)], trans='reverse') +
-        scale_x_continuous(limits = xlims ) +
+        scale_x_continuous(limits = xlims, breaks = breaks ) +
         #coord_trans(x = "log10") +
         xlab(tt) +
         ylab("") +
