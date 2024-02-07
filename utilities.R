@@ -4,7 +4,7 @@ label_list  <-  list(
                      age = 'Age',
                      sex = 'Male Sex',
                      race = 'Race',
-                     size = 'Tumor size',
+                     size = 'Tumor size (cm)',
                      marital.status = 'Marital status',
                      histology =  'Histology',
                      histology2 =  'Squamous cell histology',
