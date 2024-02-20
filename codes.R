@@ -76,21 +76,22 @@ expand.each.code  <-  function(code.list, icd9or10 = 'undefined') {
 
 valid.dxs  <- c( expand_range('1622','1629'), expand_range(as.icd10('C34'), as.icd10('C349')))
 sbrt.icds  <-  c('9230', '9231', '9232', '9233', '9239',
-                    'DB22DZ', 'DB22HZZ', 'DB22JZZ')
+                 'DB22DZ', 'DB22HZZ', 'DB22JZZ')
 sublobar.icds  <-  c(  '3230', '3239', '3220', '3229',  # ICD9 codes for sublobar
-                     '0BBC4ZX', '0BBC4ZZ', '0BBC0ZX', '0BBC0ZZ', '0BBD4ZX', '0BBD4ZZ', '0BBD0ZX', '0BBD0ZZ', '0BBF4ZX', '0BBF4ZZ', '0BBF0ZX', '0BBF0ZZ', '0BBG4ZX', '0BBG4ZZ', '0BBG0ZX', '0BBG0ZZ', '0BBH4ZX', '0BBH4ZZ', '0BBH0ZX', '0BBH0ZZ', '0BBJ4ZX', '0BBJ4ZZ', '0BBJ0ZX', '0BBJ0ZZ', '0BBK4ZX', '0BBK4ZZ', '0BBK0ZX', '0BBK0ZZ', '0BBL4ZX', '0BBL4ZZ', '0BBL0ZX', '0BBL0ZZ')
-
-
-# fofo  <-get.dates.of.procedure (medpari, c('3240'))
-# sum(nna(fofo))
-lobar.icds  <-  c(  '3241', '3249', 
-                     '0BTC4ZZ',  '0BTC0ZZ',  '0BTD4ZZ',  '0BTD0ZZ',  '0BTF4ZZ',  '0BTF0ZZ',  '0BTG4ZZ',  '0BTG0ZZ',  '0BTH4ZZ',  '0BTH0ZZ',  '0BTJ4ZZ',  '0BTJ0ZZ'  )
-other.resection.icds  <-  c(  '3250', '3259', '326','321',
-                            '0BBM4ZX', '0BBM4ZZ', '0BBM0ZX', '0BBM0ZZ', '0BTM4ZZ',  '0BTM0ZZ',  '0BTK4ZZ',  '0BTK0ZZ',  '0BTL4ZZ',  '0BTL0ZZ')
-# https://cdn.jamanetwork.com/ama/content_public/journal/surg/931810/soi140036supp1_prod.pdf?Expires=1694250325&Signature=BR7q2QxVAEOrC6fVe2FBHECGvajRtnPGDcnHBBikacu5qWQkb4mowNWgsS~j~lon2r1ZLbyRKWOiXlwG8KkZuuCOlJ-QaAV7hWa0eeIU3rKOE5OeH0POUZv1vofI5ZCYLDd4Viqiv~Ioemv0UUbIHVY-QtjZqmS7IuHbuEVVBf2ZTLtvbnMZ1HwJU8zxI9LPKWaNBE8ddk8JpPCgU2Deu6EY8qWHw~xThE7uJoiXktF5AgTsJCTM39DhVUh2lUKM9d8NUAIkivTDaL49fFN4ZrsCdR609ZSYxDwydjZsWADsvoMEyOFS0ntNJ8TedASVvn4F9TkvlyLXnCVEPiY8pA__&Key-Pair-Id=APKAIE5G5CRDK6RD3PGA
-
-
-
+                     '0BBC4ZX', '0BBC4ZZ', '0BBC0ZX', '0BBC0ZZ', '0BBD4ZX',
+                     '0BBD4ZZ', '0BBD0ZX', '0BBD0ZZ', '0BBF4ZX', '0BBF4ZZ',
+                     '0BBF0ZX', '0BBF0ZZ', '0BBG4ZX', '0BBG4ZZ', '0BBG0ZX',
+                     '0BBG0ZZ', '0BBH4ZX', '0BBH4ZZ', '0BBH0ZX', '0BBH0ZZ',
+                     '0BBJ4ZX', '0BBJ4ZZ', '0BBJ0ZX', '0BBJ0ZZ', '0BBK4ZX',
+                     '0BBK4ZZ', '0BBK0ZX', '0BBK0ZZ', '0BBL4ZX', '0BBL4ZZ',
+                     '0BBL0ZX', '0BBL0ZZ')
+lobar.icds  <-  c(  '3241', '3249', '0BTC4ZZ',  '0BTC0ZZ',  '0BTD4ZZ',
+                  '0BTD0ZZ',  '0BTF4ZZ',  '0BTF0ZZ',  '0BTG4ZZ',  '0BTG0ZZ',
+                  '0BTH4ZZ',  '0BTH0ZZ',  '0BTJ4ZZ',  '0BTJ0ZZ'  )
+other.resection.icds  <-  c(  '3250', '3259', '326','321', '0BBM4ZX',
+                            '0BBM4ZZ', '0BBM0ZX', '0BBM0ZZ', '0BTM4ZZ',
+                            '0BTM0ZZ',  '0BTK4ZZ',  '0BTK0ZZ',  '0BTL4ZZ',
+                            '0BTL0ZZ')
 sbrt.cpts  <-  c('77373', 'G0173', 'G0251', 'G0339', 'G0340', '61793',  '0082T' )
 
 

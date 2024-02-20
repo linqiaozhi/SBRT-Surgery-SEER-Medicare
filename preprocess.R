@@ -17,17 +17,15 @@ source('file.paths.R')
 # II. Identify the treatment received by patients. Output: patient.tx
 #       1. Inpatients: Load the Medpar file, and check for SBRT or Resection for inpatient
 #       2. Outpatients: The outpatient file contains bills from institutions. The carrier file contains bills from providers. 
-#             1. Carrier line file contains both procedure and the daignosis for which it was performed.        
+#             1. Carrier base and line files contains both procedure and the daignosis for which it was performed.        
 #             2.  Outpatient Revenue file contains procedures, link it with Outpatient Line file to confirm diagnosis for each procedure is lung cancer.
 #       3. Combine everything into a single dataframe patient.tx, with three two columns: PATIENT_ID, tx.date, tx
-#       4. Create a center volume variable - 1) for SBRT and 2) for sublobar resection 
 # III. Identify diagnoses (comorbidities and negative control outcomes). Output: patient.dx
 #       1. Combine long versions of medpar, outpatient line, and carrier base. Filter each by patient.tx. Results in dataframes into all.long.icd9.dx, all.long.icd10.dx
 #       2. Identify comorbidities of interest, patient.comorbidities
 #       3. Identify negative outcome diagnoses of interest, patient.noc
-# IV. Identify procedures (for now, just PET). Output: patient.proc
-#       1. 
-# V.  Part D files 
+# IV. Identify procedure and DME codes (for now, just PET). Output: patient.proc
+# V.  Identify medications using Part D files 
 # VI. Identify death using MBSF, resulting in patient.mbsf.death
 # VII. Combine patient.tx,  patient.dx, patient.proc, patient.mbsf.death, patient.seer
 # VII. Massage variables
@@ -44,14 +42,14 @@ source('file.paths.R')
 lung.SEER <- read_dta(sprintf('%s/SEER.lung.cancer.dta', dta.path))
 lung.SEER.valid.dx  <-  lung.SEER %>% filter(PRIMARY_SITE %in% valid.dxs)
 patient.seer  <- lung.SEER.valid.dx %>% filter( YEAR_OF_DIAGNOSIS>=2010 & YEAR_OF_DIAGNOSIS<=2017 )
+# Sequence number considers the patient's recorded lifetime: if only one
+# primary cancer, then it is 0. But if there are multiple, then the first will
+# be 1. So, to obtain patients with no prior malignancy history (ie. including
+# those that might have developed a separate malignancy later in life), we
+# include 0 and 1. 
 patient.seer  <- patient.seer %>% filter(SEQUENCE_NUMBER == 0 | SEQUENCE_NUMBER == 1)
 stopifnot (sum(duplicated(patient.seer$PATIENT_ID)) == 0)
 lung.SEER.pids <- patient.seer %>% select(PATIENT_ID) 
-
-# table( patient.seer$SEQUENCE_NUMBER, useNA="ifany")
-# lung.SEER %>% count(PRIMARY_SITE) %>% arrange(-n) %>% print (n=100)
-# table( patient.seer$YEAR_OF_DIAGNOSIS, useNA="ifany")
-# table( patient.seer$PRIMARY_SITE, useNA="ifany")
 print(sprintf("Total number of patients diagnosed between 2010 to 2017 with lung cancer without prior history of malignancy is %d", nrow(patient.seer))) 
 
 
@@ -77,7 +75,6 @@ if ( ! file.exists (fn.RDS) ) {
         medpars[[year]]$sublobar.date  <-  get.dates.of.procedure( medpars[[year]], sublobar.icds  )
         medpars[[year]]$lobar.date  <-  get.dates.of.procedure( medpars[[year]], lobar.icds  )
         medpars[[year]]$other.resection.date  <-  get.dates.of.procedure( medpars[[year]], other.resection.icds  )
-        #medpars[[year]] <-   medpars[[year]]  %>% filter( !is.na(sbrt.date) | !is.na(sublobar.date)  )
     }
     medpar  <-  bind_rows(medpars ,  .id='dataset.year')
     rm(medpars); gc()
@@ -85,7 +82,6 @@ if ( ! file.exists (fn.RDS) ) {
 }else{
     medpar  <-  readRDS(fn.RDS)
 }
-table( medpar$lobar.date, useNA="ifany")
 
 medpar %>% group_by(dataset.year) %>% tally() #check the number of observations per year
 
@@ -96,10 +92,6 @@ medpar <- medpar %>% mutate(
         lobar.date = ymd(lobar.date), 
         other.resection.date = ymd(other.resection.date) ) 
 medpar$sbrt.date[ ! medpar$actually.lung.cancer ]  <- as.Date(NA_Date_)
-#TODO:  is 3229 also being used for SBRT?
-
-
-
 
 ################################
 # II.2.1 Outpatients: Carrier File
@@ -150,10 +142,6 @@ carrier <- carrier %>% mutate(
               sbrt =   HCPCS_CD %in% sbrt.cpts  & valid.dx,
               sbrt.date  = if_else ( sbrt, CLM_THRU_DT, NA_character_) %>% ymd 
 )
-
-# table( nna(carrier$sbrt.date), useNA="ifany")
-
-
 
 #####################################
 # II.2.2 Outpatients: Outpatient files
@@ -210,11 +198,6 @@ outpat.outpat.revenue <- outpat.outpat.revenue %>% mutate(
     sbrt.date  =  if_else ( sbrt, CLM_THRU_DT.x, as.Date(NA_Date_) )
 )
 
-
-
-                                        # tx == 'sbrt' & RADIATION_RECODE == 1  & seer.surgery == 0 & RX_SUMM_SURG_RAD_SEQ == 0~ 'sbrt', # SBRT medicare code, radiation in first course of treatment, not concurrent with  RX_SUMM_SURG_RAD_SEQ
-                                        # seer.surgery %in% c(20, 21, 22, 23 )  & RX_SUMM_SURG_RAD_SEQ != 2~ 'sublobar',
-                                        # T ~ 'other' 
 ################################
 # II.3 Combine all three sources of treatment codes
 ################################
@@ -233,6 +216,13 @@ patient.tx <- patient.tx %>% group_by(PATIENT_ID) %>%
 patient.tx <- patient.tx %>% left_join(patient.seer %>% select (PATIENT_ID, RADIATION_RECODE, RX_SUMM_SURG_RAD_SEQ, RX_SUMM_SURG_PRIM_SITE_1998))
 
 
+# Care must be taken when excluding patients who underwent other types of
+# resection.  A patient is included in the sublobar group if he/she underwent
+# SBRT as the primary treatment. If later he/she received some additional
+# resection or even SBRT as rescue therapy, this patient should still be
+# included. This is because we are simulating a target trial where patients are
+# ``randomized'' at time of treatment and we are doing an intention to treat
+# analysis.  Same goes for the SBRT group.
 patient.tx <- patient.tx %>% mutate( 
                 tx = factor( case_when ( 
                       nna( sbrt.date)  &  
@@ -243,18 +233,6 @@ patient.tx <- patient.tx %>% mutate(
                           ( is.na(sbrt.date) | lobar.date < sbrt.date) & ( is.na(sublobar.date) | lobar.date < sublobar.date) & ( is.na(other.resection.date) | lobar.date < other.resection.date) ~ 'lobar',
                      T ~ (NA_character_)
                      ), levels = c('sublobar', 'sbrt', 'lobar')),
-               tx.old2 = factor( case_when ( 
-                     nna(sublobar.date) &   RX_SUMM_SURG_PRIM_SITE_1998 %in% c(20, 21, 22, 23 )  & RX_SUMM_SURG_RAD_SEQ != 2     ~ 'sublobar',
-                     nna(lobar.date)  & RX_SUMM_SURG_PRIM_SITE_1998 %in% c(30, 33)  & RX_SUMM_SURG_RAD_SEQ != 2 ~ 'lobar',
-                     nna( sbrt.date)   & RADIATION_RECODE == 1  & RX_SUMM_SURG_PRIM_SITE_1998 == 0 & RX_SUMM_SURG_RAD_SEQ == 0 ~ 'sbrt',
-                    T ~ (NA_character_)
-                    ), levels = c('sublobar', 'sbrt', 'lobar')),
-                tx.old = factor( case_when ( 
-                      nna( sbrt.date)  & !  nna(sublobar.date) & ! nna(lobar.date)   ~ 'sbrt',
-                     !  nna( sbrt.date)  &   nna(sublobar.date)& ! nna(lobar.date)  ~ 'sublobar',
-                     !  nna( sbrt.date)  &  !  nna(sublobar.date)&  nna(lobar.date)  ~ 'lobar',
-                     T ~ (NA_character_)
-                     ), levels = c('sublobar', 'sbrt', 'lobar')),
                tx.date = case_when (
                                     tx == 'sbrt' ~ sbrt.date,
                                     tx == 'sublobar' ~ sublobar.date,
@@ -263,35 +241,7 @@ patient.tx <- patient.tx %>% mutate(
                                     ),
                ) 
 
-#patient.tx %>% filter( nna(sbrt.date) & nna(sublobar.date)) %>% glimpse
-#patient.tx %>% filter( tx == 'lobar' & nna(sublobar.date) & nna(sbrt.date)) %>% glimpse
-#patient.tx %>% filter( nna(lobar.date) & nna(sbrt.date)) %>% glimpse
-#patient.tx %>% filter( tx.new == 'sublobar' & nna(sublobar.date) & nna(lobar.date)) %>% glimpse
-##TODO: 
-## table( patient.tx$tx, patient.tx$tx.old, useNA="ifany")
-                      
-# patient.tx <- patient.tx %>% group_by(PATIENT_ID) %>% summarise ( 
-#                tx = factor( case_when ( 
-#                     any( nna( sbrt.date) ) & ! any( nna(sublobar.date)) & !any( nna(lobar.date) )  ~ 'sbrt',
-#                     ! any( nna( sbrt.date) ) &  any( nna(sublobar.date))& !any( nna(lobar.date) ) ~ 'sublobar',
-#                     ! any( nna( sbrt.date) ) &  ! any( nna(sublobar.date))& any( nna(lobar.date) ) ~ 'lobar',
-#                     T ~ (NA_character_)
-#                     ), levels = c('sublobar', 'sbrt', 'lobar')),
-#                tx.date = case_when (
-#                                     tx == 'sbrt' ~ first(sbrt.date),
-#                                     tx == 'sublobar' ~ first(sublobar.date),
-#                                     tx == 'lobar' ~ first(lobar.date),
-#                                     T ~ ymd(NA_character_)
-#                                     ),
-#                other.resection.date = first(other.resection.date),
-#                ) 
-table( patient.tx$tx.date, useNA="ifany")
 
-outpat.tx %>% select(PATIENT_ID, sbrt.date) %>% print(n=10)
-patient.tx[2,] %>%glimpse
-patient.tx %>% filter( PATIENT_ID == 'lnK2020w0000742') %>% glimpse
-medpar %>% filter( PATIENT_ID == 'lnK2020w0000742') %>% glimpse
-carrier.tx %>% filter( PATIENT_ID == 'lnK2020w0428866')
 ################################
 # Section III:  Identify diagnoses 
 ################################
@@ -309,9 +259,8 @@ medpar.dx <- medpar %>%
     right_join(patient.tx%>% select( PATIENT_ID, tx.date) , by = 'PATIENT_ID') %>% 
     select( PATIENT_ID, tx.date, ADMSN_DT,DSCHRG_DT,  DGNS_1_CD:DGNS_25_CD) %>% 
     set_names ( ~ str_replace_all(.,"DGNS_", "ICD_DGNS_CD") %>%  str_replace_all(.,"_CD$", "")) %>%
-     mutate( CLM_FROM_DT = ymd(ADMSN_DT),
-             CLM_THRU_DT = ymd(DSCHRG_DT))
-
+    mutate( CLM_FROM_DT = ymd(ADMSN_DT),
+           CLM_THRU_DT = ymd(DSCHRG_DT))
 
 dx.wide  <-  bind_rows ( list(outpat=outpat.dx, medpar=medpar.dx, carrierbase=carrierbase.dx), .id ='source' )   %>% 
     mutate(across(where(is.character), ~ na_if(.,"")))
@@ -327,39 +276,6 @@ dx.long  <- dx.long %>%
     mutate( icd9or10 = ifelse( CLM_THRU_DT >= ymd('20151001'), 'icd10', 'icd9'  ))
 
 rm(dx.wide); gc()
-#dx.long.icd9.pre  <-  dx.long %>% filter( icd9or10 == 'icd9', CLM_THRU_DT < tx.date)
-#dx.long.icd10.pre  <-  dx.long %>% filter( icd9or10 == 'icd10', CLM_THRU_DT < tx.date)
-
-## Using the Quan comorbidity scores
-#dx.long.quan.icd9  <-  icd9_comorbid_quan_deyo( dx.long.icd9.pre %>% select(ID_DATE, DX),
-#                           return_df = T) 
-#dx.long.quan.icd10  <-  icd10_comorbid_quan_deyo( dx.long.icd10.pre %>% select(ID_DATE, DX),
-#                           return_df = T) 
-#dx.long.quan  <-  rbind(dx.long.quan.icd9,dx.long.quan.icd10) %>% 
-#    filter (rowSums(select(., MI:HIV)) > 0 ) %>%
-#    as_tibble %>% 
-#    separate (ID_DATE, c("PATIENT_ID", "CLM_THRU_DT"), sep = '_') %>% 
-#    mutate( CLM_THRU_DT = ymd(CLM_THRU_DT)) %>% 
-#    arrange( PATIENT_ID, CLM_THRU_DT)
-
-#dx.long.quan.long  <-  dx.long.quan  %>% replace(. == F, NA) %>% 
-#    pivot_longer(-c(PATIENT_ID, CLM_THRU_DT), 
-#                 names_to = 'comorbidity', 
-#                 values_to = 'comorbidity.present', 
-#                 values_drop_na = T)
-
-#dx.quan  <-  dx.long.quan.long %>% 
-#                group_by(PATIENT_ID, comorbidity) %>% 
-#                #mutate( time.from.last =  CLM_FROM_DT - first(CLM_FROM_DT)) %>% 
-#                #arrange(PATIENT_ID, comorbidity) %>% 
-## Use this to require at >1 visits at certain time separation
-#                #summarise( meets.criteria = max( as.numeric(time.from.last, units='days') ) >= 30 ) %>% 
-#                summarise( meets.criteria = T) %>% 
-#                filter(meets.criteria) %>%
-#                pivot_wider( names_from =comorbidity, values_from = meets.criteria, values_fill = F )  
-
-
-## Using hardcoded codes
 
 year.month  <-  function(x) {
     sprintf('%d-%d', year(x), month(x) )
@@ -380,57 +296,21 @@ for (i in 1:length(dx.icd)) {
              group_by(PATIENT_ID) %>% 
              summarise( 
                           !!dx.name := first(na.omit(temp.post)), 
-                          !!sprintf('%s_pre', dx.name ) := first(na.omit(temp.pre)),
-                          !!sprintf('%s_any', dx.name ) := first(na.omit(temp.any)),
                           !!sprintf('%s_pre_count', dx.name ) := length((na.omit(temp.pre))),
-                          !!sprintf('%s_pre_date_count', dx.name ) := length(unique(na.omit(temp.pre))),
                           !!sprintf('%s_pre_month_count', dx.name ) := length(unique(year.month(na.omit(temp.pre)))),
                           !!sprintf('%s_any_count', dx.name ) := length((na.omit(temp.any))),
-                          !!sprintf('%s_any_date_count', dx.name ) := length(unique(na.omit(temp.any))),
+                          !!sprintf('%s_any_month_count', dx.name ) := length(unique(year.month(na.omit(temp.any)))),
                           !!sprintf('%s_post_count', dx.name ) := length((na.omit(temp.post))),
-                          !!sprintf('%s_post_date_count', dx.name ) := length(unique(na.omit(temp.post)))
+                          !!sprintf('%s_post_month_count', dx.name ) := length(unique(year.month(na.omit(temp.post)))),
              )
              dx.hardcodeds  <- dx.hardcodeds %>% left_join(dx.hardcoded, by='PATIENT_ID')
 }
 
-# Get first dx of all time
-# first.dx  <- dx.long %>% arrange(PATIENT_ID, CLM_THRU_DT)
-# first.dx <- first.dx %>% group_by(PATIENT_ID) %>% summarise( first.dx.date = first(CLM_THRU_DT))
-
 patient.dx   <-  dx.hardcodeds   %>%
-    # left_join(dx.quan, by ='PATIENT_ID') %>%   
-    # mutate(across(colnames(dx.quan), ~replace(., is.na(.), FALSE))) %>% 
     mutate(across(contains('count'), ~replace(., is.na(.), 0)))
-# %>%
-    # left_join(first.dx)
-
-#TODO: Remove:
-# patient.dx %>% filter( PATIENT_ID == 'lnK2020z3103264' ) %>% print(n=Inf)
-# patient.dx %>% filter( PATIENT_ID == 'lnK2020z3103264' ) %>% glimpse
-# table(patient.dx$other_injury_pre_month_count  , useNA="ifany")
-# table(patient.dx$other_injury_pre_count  , useNA="ifany")
-# table(A.final$other_injury_pre_count  , useNA="ifany")
-# table(patient.dx$diverticular_disease_pre_month_count  , useNA="ifany")
-
-#     print(n=Inf, width=Inf)
-# table( patient, useNA="ifany")
-
-# outpat.dx %>% filter( PATIENT_ID == 'lnK2020z3103264' ) %>% select(dataset.year:ICD_DGNS_CD7) %>% print(n=Inf)
-# medpar.dx %>% filter( PATIENT_ID == 'lnK2020z3103264' ) %>% select(tx.date:ICD_DGNS_CD7) %>% print(n=Inf)
-# carrierbase.dx %>% filter( PATIENT_ID == 'lnK2020z3103264' ) %>% select(tx.date:ICD_DGNS_CD7) %>% print(n=Inf)
-# %>% mutate( desc = explain_code(DX, condense =F ))%>% arrange(CLM_THRU_DT) %>% print(width=Inf, n=200) 
-# dx.long %>%filter( PATIENT_ID == 'lnK2020z3103264' & DX %in% dx.icd[['other_injury']]$icd9) %>% mutate( desc = explain_code(DX, condense =F ))%>% arrange(CLM_THRU_DT) %>% print(width=Inf, n=200) 
-# dx.long %>%filter( PATIENT_ID == 'lnK2020x2392462' & DX %in% dx.icd[['other_injury']]$icd9) %>% mutate( desc = explain_code(DX, condense =F ))%>% arrange(CLM_THRU_DT) %>% print(width=Inf, n=200) 
-# carrierbase %>% filter(PATIENT_ID == 'lnK2020z3103264')
-# dx.long$CLM_THRU_DT [1:5] %>% year.month
-# %>% month 
-# # fofo  <-  carrier %>% filter ( PATIENT_ID == 'lnK2020x9593394')   %>% print(width=Inf)
-# # dta.fn  <-  sprintf('%s/nch%s.base.dta.gz', dta.path, '2017' )
-# # carrierbasei  <-   read_dta(dta.fn) #
-
 
 ################################
-# SECTION IV Procedure codes (not for treatment)
+# SECTION IV Procedure and DME codes (not for treatment)
 ################################
 # Load DME
 fn.RDS  <- sprintf("%s/dme.line.RDS", rds.path)
@@ -441,7 +321,7 @@ if ( ! file.exists (fn.RDS) ) {
         year  <-  years[yeari]
         print(year)
         dme.linei  <-   read_dta(sprintf('%s/dme%s.line.dta', data.path, year) , 
-                               col_select=c('PATIENT_ID', 'CLM_ID',  'CLM_THRU_DT', 'HCPCS_CD' ))
+                                 col_select=c('PATIENT_ID', 'CLM_ID',  'CLM_THRU_DT', 'HCPCS_CD' ))
         dme.lines[[year]]  <-  dme.linei %>% inner_join(lung.SEER.pids)
     }
     dme.line  <-  bind_rows(dme.lines,  .id='dataset.year')
@@ -484,15 +364,12 @@ for (i in 1:length(procois)) {
              group_by(PATIENT_ID) %>% 
              summarise( 
                           !!proc.name := first(na.omit(temp.post)), 
-                          # !!sprintf('%s_pre', proc.name ) := first(na.omit(temp.pre)),
-                          # !!sprintf('%s_any', proc.name ) := first(na.omit(temp.any)),
                           !!sprintf('%s_pre_count', proc.name ) := length((na.omit(temp.pre))),
-                          # !!sprintf('%s_pre_date_count', proc.name ) := length(unique(na.omit(temp.pre))),
                           !!sprintf('%s_pre_month_count', proc.name ) := length(unique(year.month(na.omit(temp.pre)))),
                           !!sprintf('%s_any_count', proc.name ) := length((na.omit(temp.any))),
-                          # !!sprintf('%s_any_date_count', proc.name ) := length(unique(na.omit(temp.any))),
+                          !!sprintf('%s_any_month_count', proc.name ) := length(unique(year.month(na.omit(temp.any)))),
                           !!sprintf('%s_post_count', proc.name ) := length((na.omit(temp.post))),
-                          # !!sprintf('%s_post_date_count', proc.name ) := length(unique(na.omit(temp.post)))
+                          !!sprintf('%s_post_month_count', proc.name ) := length(unique(year.month(na.omit(temp.post)))),
              )
              proc.hardcodeds  <- proc.hardcodeds %>% left_join(proc.hardcoded, by='PATIENT_ID')
 }
@@ -559,7 +436,9 @@ for (i in 1:length(drugs)) {
       !!sprintf('%s_pre_count', drug.name) := length((na.omit(temp.pre))),
       !!sprintf('%s_pre_month_count', drug.name ) := length(unique(year.month(na.omit(temp.pre)))),
       !!sprintf('%s_any_count', drug.name ) := length((na.omit(temp.any))),
+      !!sprintf('%s_any_month_count', drug.name ) := length(unique(year.month(na.omit(temp.any)))),
       !!sprintf('%s_post_count', drug.name) := length((na.omit(temp.post))),
+      !!sprintf('%s_post_month_count', drug.name ) := length(unique(year.month(na.omit(temp.post)))),
     )
   patient.drugs <- patient.drugs %>% left_join(drug, by = 'PATIENT_ID')
 }
@@ -570,29 +449,22 @@ for (i in 1:length(drugs)) {
 # SECTION VI MBSF death
 ################################
 
-# fofo  <- read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year))
-
-
 fn.RDS  <- sprintf("%s/MBSF.RDS", rds.path)
 if ( ! file.exists (fn.RDS) ) {
-  mbsfs  <-  list()
-  years  <-  as.character(2010:2019)
-  for (yeari in 1:length(years)) {
-    year  <-  years[yeari]
-    print(year)
+    mbsfs  <-  list()
+    years  <-  as.character(2010:2019)
+    for (yeari in 1:length(years)) {
+        year  <-  years[yeari]
+        print(year)
         mbsfi  <-   read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year), col_select=c('PATIENT_ID', 'BENE_DEATH_DT', 'VALID_DEATH_DT_SW', 'BENE_PTA_TRMNTN_CD', 'BENE_PTB_TRMNTN_CD', sprintf('MDCR_STATUS_CODE_%02d', 1:12), 'BENE_HI_CVRAGE_TOT_MONS', 'BENE_SMI_CVRAGE_TOT_MONS', 'BENE_ENROLLMT_REF_YR'))
-    # inner join with the SEER patients to reduce size
-    mbsfs[[year]]  <-  mbsfi %>% 
-      inner_join(lung.SEER.pids) 
-  }
-  mbsf <-  bind_rows(mbsfs,  .id='dataset.year')
-  saveRDS(object = mbsf, file = fn.RDS) 
+        # inner join with the SEER patients to reduce size
+        mbsfs[[year]]  <-  mbsfi %>% inner_join(lung.SEER.pids) 
+    }
+    mbsf <-  bind_rows(mbsfs,  .id='dataset.year')
+    saveRDS(object = mbsf, file = fn.RDS) 
 }else{
-  mbsf  <-  readRDS(fn.RDS)
+    mbsf  <-  readRDS(fn.RDS)
 }
-
-
-
 
 # Need to get the number of months pre-tx during which the patient was enrolled. 
 # One record per patient per month enrolled
@@ -602,8 +474,8 @@ mbsf.long  <- mbsf  %>% select( PATIENT_ID,BENE_ENROLLMT_REF_YR,  MDCR_STATUS_CO
     mutate(year = BENE_ENROLLMT_REF_YR,
            month = str_sub(month, -2),
            date = ceiling_date(ymd(sprintf('%d-%s-01', year, month)), 'month') - days(1))
-mbsf.long  <-  mbsf.long %>% right_join(patient.tx %>% select( PATIENT_ID, tx.date))
-mbsf.pre.tx.months <- mbsf.long %>% group_by(PATIENT_ID) %>% summarise( pre.tx.months = sum( (date < tx.date)) )
+    mbsf.long  <-  mbsf.long %>% right_join(patient.tx %>% select( PATIENT_ID, tx.date))
+    mbsf.pre.tx.months <- mbsf.long %>% group_by(PATIENT_ID) %>% summarise( pre.tx.months = sum( (date < tx.date)) )
 
 patient.mbsf <- mbsf %>% mutate( 
                         death.date.mbsf.temp = ifelse(mbsf$BENE_DEATH_DT!= "", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd ) %>% 
@@ -625,8 +497,8 @@ A  <-  patient.seer %>%
     left_join( patient.mbsf, by = 'PATIENT_ID') %>%
     left_join( patient.tx %>% select( -RADIATION_RECODE, -RX_SUMM_SURG_PRIM_SITE_1998, - RX_SUMM_SURG_RAD_SEQ), by = 'PATIENT_ID') %>% 
     left_join( patient.drugs, by = 'PATIENT_ID')  
-A  <-  A %>% #Use lung.SEER.first.lc.dx
-    filter(YEAR_OF_DIAGNOSIS >=2010) %>%  
+
+A  <-  A %>% 
     rename ( 
             age                    = AGERECODEWITHSINGLEAGES_AND_100,
             sex                    = SEX,
@@ -660,47 +532,11 @@ A  <-  A %>% #Use lung.SEER.first.lc.dx
                                               other.cause.mortality ==1 ~ 'Death',
                                               T ~ 'Unknown' ),
            histology.code = sprintf( '%d/%d',  HISTOLOGIC_TYPE_ICD_O_3, BEHAVIOR_CODE_ICD_O_3 ),
-           #histology = case_when ( 
-           #                       histology.code  == '8140/3' ~ 'Adenocarcinoma, NOS',
-           #                       # INvasive non-mucinous adenocarcinomas
-           #                       histology.code  == '8250/3' ~ 'Adenocarcinoma, lepidic',
-           #                       histology.code  == '8550/3' ~ 'Adenocarcinoma, acinar',
-           #                       histology.code  == '8250/3' ~ 'Adenocarcinoma, papillary',
-           #                       #histology.code  == '8265/3' ~ 'Adenocarcinoma, micropapillary', # there were not any
-           #                       #histology.code  == '8230/3' ~ 'Adenocarcinoma, solid',
-           #                       #Invasive mucinous adenocarcinoma
-           #                       histology.code  == '8253/3' |histology.code  == '8480/3'  ~ 'Adenocarcinoma, mucinous',
-           #                       histology.code  == '8255/3' ~ 'Adenocarcinoma, mixed',
-           #                       histology.code  %in%  c('8070/3', '8071/3', '8073/3', '8075/3', '8076/3', '8078/3') ~ 'Squamous cell carcinoma',
-           #                       histology.code  == '8041/3' ~ 'Small cell carcinoma',
-           #                       histology.code  == '8000/3' ~ 'Malignancy, unspecified',
-           #                       histology.code  == '8046/3' ~ 'Non-small cell carcinoma',
-           #                       histology.code  == '8010/3' ~ 'Carcinoma, unspecified',
-           #                       T ~ 'Other' ),
            microscopically_confirmed = DIAGNOSTIC_CONFIRMATION %in% c(1,2,3,4),
            primary.site = case_when ( 
                                      str_detect(icdo3_code,'^C34*') ~ 'Lung',
                                      T ~ 'Other'
                                      ),
-           ##Histology Categorical (based on information from -- INSERT CITATION)
-           #histology.cat = case_when (
-           #  histology.code %in% c('8140/3', '8550/3',  '8551/3',  '8260/3', '8230/3', '8333/3', '8144/3', '8480/3', '8253/3', '8254/3') ~ 'Adenocarcinoma',
-           #  histology.code %in%  c('8070/3', '8071/3', '8072/3', '8073/3', '8074/3', '8075/3', '8076/3', '8078/3', '8083/3') ~ 'Squamous Cell Carcinoma',
-           #  histology.code %in% c('8012/3', '8013/3', '8014/3') ~ 'Large Cell Carcinoma',
-           #  histology.code == '8560/3' ~ 'Adenosquamous Cell Carcincoma',
-           #  histology.code %in% c('8240/3',	'8241/3',	'8242/3',	'8243/3',	'8244/3',	'8245/3', '8246/3',	'8249/3') ~ 'Carcinoid Tumor',
-           #  histology.code %in% c('8250/3', '8251/3', '8252/3', '8255/3') ~ 'Tumors Formerly Classifed as Bronchioloalveolar Carcinoma',
-           #  histology.code == '8046/3' ~ 'Non-small Cell Carcinoma, NOS',
-           #  histology.code == '8041/3' ~ 'Small Cell Carcinoma',
-           #  T ~ 'Other/Unknown'),
-           # histology.simple=case_when(
-           #   histology.cat=='Adenocarcinoma' ~ 'Adenocarcinoma',
-           #   histology.cat=='Squamous Cell Carcinoma' ~ 'Squamous Cell Carcinoma',
-           #   histology.cat=='Tumors Formerly Classifed as Bronchioloalveolar Carcinoma' ~ 'Tumors Formerly Classifed as Bronchioloalveolar Carcinoma', 
-           #   histology.cat=='Non-small Cell Carcinoma, NOS' ~ 'Non-small Cell Carcinoma, NOS',
-           #   histology.cat=='Adenosquamous Cell Carcinoma' | histology.cat=='Large Cell Carcinoma' | histology.cat=='Carcinoid' ~ 'Other/Unknown',
-           #   T ~ 'Other/Unknown'
-           # ),
 histology =  case_when(
                        grepl("^8250/3", histology.code) ~ 'Adenocarcinoma, lepidic',
                        histology.code %in% c('8550/3', '8551/3') ~ 'Adenocarcinoma, acinar',
@@ -729,20 +565,6 @@ histology =  case_when(
                        grepl("^848", histology.code) ~ 'Adenocarcinoma, mucinous',
                        histology.code %in% c('8012/3', '8013/3', '8014/3') ~ 'Large cell', # large cell
                        T ~ 'Other'),
-           # histology =  case_when(
-           #                         grepl("^814", histology.code) ~ 'Adenocarcinoma, NOS',
-           #                         grepl("^807", histology.code) ~ 'Squamous cell',
-           #                         grepl("^8046", histology.code) ~ 'Non-small cell carcinoma',
-           #                         grepl("^8041", histology.code) ~ 'Small cell',
-           #                         grepl("^8255/3", histology.code) ~ 'Adenocarcinoma, mixed',
-           #                         grepl("^8550/3", histology.code) ~ 'Adenocarcinoma, acinar',
-           #                         grepl("^824", histology.code) ~ 'Carcinoid',
-           #                         grepl("^856", histology.code) ~ 'Adenosquamous',
-           #                         grepl("^848", histology.code) ~ 'Adenocarcinoma, mucinous',
-           #                         grepl("^8250/3", histology.code) ~ 'Adenocarcinoma, lepidic',
-           #                         grepl("^8013/34", histology.code) ~ 'Large cell neuroendocrine',
-           #                         grepl("^8012/34", histology.code) ~ 'Large cell carcinoma, NOS',
-           #                         T ~ 'Other'),
            tnm.t = case_when ( 
                               str_detect(DERIVED_SEER_COMBINED_T_2016, '^[cp]1') | DERIVED_AJCC_T_7TH_ED_2010 %>% between (100,190) | DERIVED_AJCC_T_7TH_ED_2010 %>% between(800, 810) ~ '1',
                               str_detect(DERIVED_SEER_COMBINED_T_2016, '^[cp]2') | DERIVED_AJCC_T_7TH_ED_2010  %>% between (200,290)~ '2',
@@ -787,9 +609,16 @@ histology =  case_when(
                                   (size >=7 & size<100) | tnm.t=='4'  ~ 'T4',
                                   T ~ NA_character_),
            dx.date = ymd( ifelse ( nna(YEAR_OF_DIAGNOSIS) & nna(MONTH_OF_DIAGNOSIS) , sprintf('%d%02d15', YEAR_OF_DIAGNOSIS, MONTH_OF_DIAGNOSIS), NA_character_ ) )  ,
-           #death.date = ymd( ifelse ( ""!=(SEER_DATEOFDEATH_YEAR) & ""!=(SEER_DATEOFDEATH_MONTH) , sprintf('%s%s15', SEER_DATEOFDEATH_YEAR, SEER_DATEOFDEATH_MONTH), NA_character_ ) ),
            cod.new = case_when(
-             grepl("C", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) & !grepl("C34", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Other Cancer',
+           # Note that for a SEQUENCE_NUMBER 0 cancer, the cause of death might
+               # be listed as a different type of cancer, but
+               # this is stil lconsidered lung cancer. If the
+               # patient had a different primary, then the
+               # sequence would be 1. If it's 0, and the cause
+               # of death is, say, liver cancer, then the
+               # thought is that this is actually just a met.
+               # https://seer.cancer.gov/causespecific/
+             grepl("C", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) & !grepl("C34", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Other Cancer', 
              grepl("C34", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Lung Cancer',
              grepl("J", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Respiratory Disease',
              grepl("I", CAUSE_OF_DEATH_ICD_10, fixed=TRUE) ~ 'Circulatory Disease',
@@ -806,16 +635,12 @@ histology =  case_when(
              CAUSE_OF_DEATH_ICD_10 == "" ~ 'Alive',
              CAUSE_OF_DEATH_ICD_10 == '7777' | CAUSE_OF_DEATH_ICD_10 == '7797' ~ 'Unknown',
              T ~ 'Other'
-           ),
-           Smoking = nna(smoking_pre),
-           Oxygen = nna(o2_pre) )
+           ))
     A  <- A %>% mutate( 
                        dx.to.tx  =  as.numeric( tx.date - dx.date, units = 'days'),
                        death.date.seer = 
                            ymd( ifelse ( ""!=(SEER_DATEOFDEATH_YEAR) & ""!=(SEER_DATEOFDEATH_MONTH) , sprintf('%s%s15', SEER_DATEOFDEATH_YEAR, SEER_DATEOFDEATH_MONTH), NA_character_ ) )  ,
                        tt = as.numeric( if_else ( nna(death.date.mbsf), death.date.mbsf, ymd('20191231')  ) - tx.date, units = 'days'),
-                       # time.enrolled = as.numeric( if_else ( nna(death.date.mbsf), death.date.mbsf, ymd('20191231')  ) - first.dx.date, units = 'days'),
-                       #TODO: The current time.enrolled is based on the first diagnosis. Instead, it should be based on the mbsf
                        thirty.day.mortality = ifelse ( nna(death.date.mbsf) & tt < 30, T, F ) ,
                        ninety.day.mortality = ifelse ( nna(death.date.mbsf) & tt < 90, T, F ) ,
                        death = death.date.mbsf,
@@ -827,27 +652,6 @@ histology =  case_when(
                                  nna(death.date.mbsf) & is.na( death.date.seer)  & year(death.date.mbsf) < 2019 ~ 'invalid', # Dead in MBSF but not in SEER is invalid if it occured <2019
                                                          ))
     A %>% filter(tnm.t==1) %>% count(DERIVED_SEER_COMBINED_T_2016)
-    # table( A$tnm.t, A$t_stage_8, useNA="ifany")
-    # table( A$DERIVED_AJCC_T_7TH_ED_2010, useNA="ifany")
-
-    # A %>% count(histology.code, histology2) %>% print(n= Inf)
-    # table( A$t_stage_8, A$size, useNA="ifany")
-    # table( A$DERIVED_SEER_COMBINED_T_2016, A$YEAR_OF_DIAGNOSIS, useNA="ifany")
-
-    # fofo  <-  A %>% filter( is.na(tnm.t) & nna(size) & size <=3.0  & tnm.n == 0 & tnm.m ==0) 
-
-    # table( A$size, useNA="ifany")
-    
-    # table( A$DERIVED_AJCC_T_7TH_ED_2010, A$YEAR_OF_DIAGNOSIS, useNA="ifany")
-# table( A$tx.old, A$tx, useNA="ifany")
-# table( A.final$tx.old, A.final$tx, useNA="ifany")
-# fofo  <- A$PATIENT_ID[which(is.na(A$tx) & A$tx.old == 'sbrt')]
-
-# A %>% filter(PATIENT_ID == fofo[7]) %>% select(PATIENT_ID, tx, tx.old, seer.surgery, RX_SUMM_SURG_RAD_SEQ) %>%  glimpse
-# patient.tx %>% filter(PATIENT_ID == fofo[2]) %>% glimpse
-
-# table( patient.seer$RX_SUMM_SURG_PRIM_SITE_1998, useNA="ifany")
-# table( patient.seer$RX_SUMM_SYSTEMIC_SURG_SEQ, useNA="ifany")
 
 ################################
 # Section IX  Exclusion
@@ -860,7 +664,6 @@ print(nrow(A))
 table( A$histology, useNA="ifany")
 A.final  <- A %>% filter ( histology !="Small cell" & histology != 'Other' & histology != 'Carcinoid' & histology != 'Adenosquamous' & histology != 'Large cell' & histology != 'Non-small cell carcinoma' )
  # A.final  <- A %>% filter ( histology !="Small cell" & histology != 'Other' & histology != 'Carcinoid' & histology != 'Large cell' & histology != 'Non-small cell carcinoma' )
-table( A.final$histology, useNA="ifany")
 print(nrow(A.final))
 A.final  <-  A.final %>% filter ( (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c") & tnm.n==0 & tnm.m==0 )
 print(nrow(A.final))
@@ -875,7 +678,7 @@ A.final  <-  A.final %>% filter (
 incex(A.final)
 A.final <- A.final %>% filter( RX_SUMM_SYSTEMIC_SURG_SEQ == 0)
 incex(A.final)
-A.final  <-  A.final %>% filter (age >= 65 ) #TODO: <80
+A.final  <-  A.final %>% filter (age >= 65 )
 incex(A.final)
 A.final  <-  A.final %>% filter (dx.to.tx <= 135 & dx.to.tx >= -16) # The diagnosis date is chosen to be the 15th of each month, as the date itself is not available
 incex(A.final)
@@ -896,7 +699,7 @@ table( A.final$histology, useNA="ifany")
 # data.frame ( A.final$YEAR_THERAPY_STARTED, A.final$MONTH_OF_DIAGNOSIS, A.final$tx.date)
 
 
-A.final  %>%  write_rds( 'data/A.final25.all.gte.65.RDS' )
+A.final  %>%  write_rds( 'data/A.final27.all.gte.65.RDS' )
 
 
 table( A.final$arthropathy_pre_month_count, useNA="ifany")
@@ -955,6 +758,7 @@ table( A.final$tx, A.final$REASONNOCANCER_DIRECTED_SURGERY, useNA="ifany")
 
 
 
+
 # A.fofo  <-  A.final2 %>% filter ( seer.surgery == 22 & is.na(tx) & PRIMARY_PAYER_AT_DX  == 60)
 # A.fofo  <-  A.final2 %>% filter (dx.to.tx < -30)
 # A.fofo  <-  A.final2  %>% filter (METS_pre_count >0 )
@@ -989,7 +793,7 @@ A.final.sens1  <-  A.final.sens1 %>% filter (
                                  ( tx == 'sublobar' & ( is.na( RX_SUMM_SURG_PRIM_SITE_1998) |  RX_SUMM_SURG_PRIM_SITE_1998 %in% c(20, 21, 22, 23 ) ) & (is.na(RADIATION_RECODE) | RADIATION_RECODE == 0) )
                              )
 incex(A.final.sens1)
-# A.final.sens1 <- A.final.sens1 %>% filter( RX_SUMM_SYSTEMIC_SURG_SEQ == 0)
+A.final.sens1 <- A.final.sens1 %>% filter(  ( tx == 'sbrt' & RX_SUMM_SYSTEMIC_SURG_SEQ == 0) | (tx == 'sublobar' & RX_SUMM_SYSTEMIC_SURG_SEQ %in% c(0, 3)))
 incex(A.final.sens1)
 A.final.sens1  <-  A.final.sens1 %>% filter (age >= 65 ) #TODO: <80
 incex(A.final.sens1)
@@ -1004,7 +808,8 @@ A.final.sens1  <-  A.final.sens1 %>% filter (valid.death.indicator == 'valid' )
 incex(A.final.sens1)
 A.final.sens1  <-  A.final.sens1 %>% filter (microscopically_confirmed)
 sum(A.final.sens1$tx == 'sublobar' & A.final.sens1$tnm.n %in% c('1','2','3')) / sum(A.final.sens1$tx == 'sublobar')
-A.final.sens1  %>%  write_rds( 'data/A.final25.sens1.RDS' )
+table( A.final.sens1$RX_SUMM_SYSTEMIC_SURG_SEQ, useNA="ifany")
+A.final.sens1  %>%  write_rds( 'data/A.final27.sens1.RDS' )
 
 
 
