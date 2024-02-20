@@ -18,7 +18,7 @@ set.seed(3)
  subset.name <- 'all.gte.65'
  # subset.name <- 'sens1'
 
-filename.in  <-  sprintf('data/A.final20.%s.RDS', subset.name)
+filename.in  <-  sprintf('data/A.final22.%s.RDS', subset.name)
 A.final  <-  readRDS(filename.in)  %>% 
     mutate(treatment.year = year(tx.date),
             death.90.day = if_else ( ninety.day.mortality, death, as.Date(NA_character_)),
@@ -30,6 +30,7 @@ A.final  <-  readRDS(filename.in)  %>%
 A.final$tx  <-  droplevels(A.final$tx)
 table( A.final$tx, useNA="ifany")
 
+table( A.final$treatment.year, useNA="ifany")
 # Define the analysis
  analysis.name  <-  'primary'
 # analysis.name  <-  'sens1'
@@ -262,35 +263,48 @@ ggsave(g3, width=6, height=2.65, filename = sprintf('figs/%s.proximal.pdf', anal
 
 
 
+################################
+# Abstract plot 
+################################
+
+G  <-  (g2.a  / g2.b+ plot_layout(heights = (c(1,2)))) / (g3.a / g3.b+ plot_layout(heights = (c(1,2))))
+G  <- (g2) / (g3) + plot_layout(ncol=1, nrow=4, heights = c(0.25,2, 0.25,2))
+G  <-   (( g2.a / g2.b) + plot_annotation('(A) Standard multivariable models')) / (( g3.a  / g3.b)  + plot_annotation('(B) Proximal models')) + plot_layout(ncol=1, nrow=4, heights = c(1,2, 0.25,2))
+
+G  <-    (g2.a+ ggtitle('(A) Standard multivariable models')) / g2.b  /plot_spacer()/  (g3.a + ggtitle('(B) Proximal causal inference models')) / g3.b   + plot_layout(ncol=1, nrow=5, heights = c(1,2, 0.1, 0.25,2))
+# G  <-   (( g2.a / g2.b) + plot_annotation('(A) Standard multivariable models')) / (( g3.a  / g3.b)  + plot_annotation('(B) Proximal models')) + plot_layout(ncol=1, nrow=5, heights = c(1,2,0.1, 0.25,2))
+# G  <-   (( g2.a / g2.b) + plot_annotation('(A) Standard multivariable models')+ plot_layout(ncol=1, nrow=2, heights = c(1,2)) ) | (( g3.a  / g3.b)  + plot_annotation('(B) Proximal models') + plot_layout(ncol=1, nrow=2, heights=c(0.25,2)))
+
+# + plot_layout(ncol=1, nrow=4)
+                                                                                                                 # , heights = c(1,2,0.1, 0.25,2))
+ggsave(G, width=7, height=5, filename = ('figs/grant.png'))
+
 
 ################################
 # Signle plot
 ################################
 
-# height  <-  2
-# Y.toplot  <-  c('death', 'death.90.day', 'death.other.cause.gt90day', 'death.cause.specific')
-# hazard.differences.outcomes.toplot  <-  hazard.differences.outcomes[Y.toplot,]
-# hazard.differences.outcomes.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.toplot)
-# g1.a  <-  make.HD.plot(hazard.differences.outcomes.toplot, label_list2) + ggtitle('Raw (unadjusted)')
-# g1.b  <-  make.OR.plot(odds.ratios.nocs, label_list2)
-# g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) #+ plot_annotation(title="Raw")
-#  ggsave(g1, width=5, height=2.55, filename = sprintf('figs/%s.raw.pdf', analysis.name))
+# # height  <-  2
+# # Y.toplot  <-  c('death', 'death.90.day', 'death.other.cause.gt90day', 'death.cause.specific')
+# # hazard.differences.outcomes.toplot  <-  hazard.differences.outcomes[Y.toplot,]
+# # hazard.differences.outcomes.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.toplot)
+# # g1.a  <-  make.HD.plot(hazard.differences.outcomes.toplot, label_list2) + ggtitle('Raw (unadjusted)')
+# # g1.b  <-  make.OR.plot(odds.ratios.nocs, label_list2)
+# # g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) #+ plot_annotation(title="Raw")
+# #  ggsave(g1, width=5, height=2.55, filename = sprintf('figs/%s.raw.pdf', analysis.name))
 # hazard.differences.outcomes.adj.toplot  <-  hazard.differences.outcomes.adj[Y.toplot,]
 # hazard.differences.outcomes.adj.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.adj.toplot)
-# g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj.toplot, label_list2) + ggtitle('Adjusted')
-# g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list2)
-# # g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Adj")
-#  # ggsave(g2, width=5, height=2.55, filename = sprintf('figs/%s.adj.pdf', analysis.name))
+#  g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj.toplot, label_list2) + ggtitle('Adjusted')
+#  g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list2)
+# g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Adj")
 # hazard.differences.outcomes.proximal.toplot  <-  hazard.differences.outcomes.proximal[c('death.cause.specific'),]
 # hazard.differences.outcomes.proximal.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.proximal.toplot)
-# g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal.toplot, label_list2) + ggtitle('Proximal')
-# g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
-#  g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Proximal")
-#  ggsave(g3, width=4, height=2.55, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
-# # G  <-  (g1.a/g1.b / g2.a / g2.b/ g3.a / g3.b) + plot_layout(heights = (c(1,2, 1,2, 1,2))) 
-# # ggsave(G, width=7, height=9, filename = sprintf('figs/%s.all.pdf', analysis.name))
+#  g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal.toplot, label_list2) + ggtitle('Proximal')
+#  g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list2)
+#   g3  <-  g3.a / g3.b + plot_layout(heights = (c(1,height)))#+ plot_annotation(title="Proximal")
 # # G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
-# # ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
+# G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2))))| (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) | (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
+#  # ggsave(G, width=8.5, height=3, filename = ('figs/grant.pdf'))
 
 
 
