@@ -92,7 +92,7 @@ other.resection.icds  <-  c(  '3250', '3259', '326','321', '0BBM4ZX',
                             '0BBM4ZZ', '0BBM0ZX', '0BBM0ZZ', '0BTM4ZZ',
                             '0BTM0ZZ',  '0BTK4ZZ',  '0BTK0ZZ',  '0BTL4ZZ',
                             '0BTL0ZZ')
-sbrt.cpts  <-  c('77373', 'G0173', 'G0251', 'G0339', 'G0340', '61793',  '0082T' )
+sbrt.cpts  <-  c('77373', 'G0173', 'G0251', 'G0339', 'G0340', '61793',  '0082T' , '77435')
 
 
 

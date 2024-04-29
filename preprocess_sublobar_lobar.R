@@ -665,8 +665,17 @@ table( A$histology, useNA="ifany")
 A.final  <- A
 A.final  <-  A.final %>% filter (age >= 65 )
 A.final  <- A.final %>% filter ( histology !="Small cell" & histology != 'Other'  )
+table( A.final$t_stage_8, useNA="ifany")
+#TODO: Why are there 73,000 NA here?? Maybe there's a problem with how we define stage...
 A.final  <-  A.final %>% filter ( (t_stage_8=="T1a" | t_stage_8=="T1b" ) & tnm.n==0 & tnm.m==0 )
 A.final  <-  A.final %>% filter (microscopically_confirmed)
+table( A.final$tx, A.final$RX_SUMM_SURG_PRIM_SITE_1998 , useNA="ifany")
+A.final  <-  A.final %>%
+        filter (
+                                 ( tx == 'lobar' & ( is.na( RX_SUMM_SURG_PRIM_SITE_1998) |  RX_SUMM_SURG_PRIM_SITE_1998 %in% c(30, 33) ) ) |
+                                 ( tx == 'sublobar' & ( is.na( RX_SUMM_SURG_PRIM_SITE_1998) |  RX_SUMM_SURG_PRIM_SITE_1998 %in% c(20, 21, 22, 23 ) )  )
+                             )
+
 A.final  <-  A.final %>% filter (tx %in% c('sublobar', 'lobar') )
 incex(A.final)
 A.final  <-  A.final %>% filter (RX_SUMM_SCOPE_REG_LN_SUR_2003 %in% c(4,5) )
@@ -677,10 +686,6 @@ A.final  <-  A.final %>% filter (dx.to.tx <= 135 & dx.to.tx >= -16) # The diagno
 A.final  <-  A.final %>% filter (pre.tx.months >= 12)
 A.final  <-  A.final %>% filter (valid.death.indicator == 'valid' )
 incex(A.final)
-A.final  <-  A.final %>% filter (
-                                 ( tx == 'lobar' & ( is.na( RX_SUMM_SURG_PRIM_SITE_1998) |  RX_SUMM_SURG_PRIM_SITE_1998 %in% c(30, 33) ) ) |
-                                 ( tx == 'sublobar' & ( is.na( RX_SUMM_SURG_PRIM_SITE_1998) |  RX_SUMM_SURG_PRIM_SITE_1998 %in% c(20, 21, 22, 23 ) )  )
-                             )
 incex(A.final)
 
 A.final  %>%  write_rds( 'data/A.lobar.sublobar2.RDS' )

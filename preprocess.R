@@ -84,6 +84,7 @@ if ( ! file.exists (fn.RDS) ) {
 }
 
 medpar %>% group_by(dataset.year) %>% tally() #check the number of observations per year
+sum(!is.na(medpar$sbrt.date))
 
 medpar <- medpar %>% mutate(
         actually.lung.cancer = find.rows( across(DGNS_1_CD:DGNS_25_CD), valid.dxs),  
@@ -456,7 +457,7 @@ if ( ! file.exists (fn.RDS) ) {
     for (yeari in 1:length(years)) {
         year  <-  years[yeari]
         print(year)
-        mbsfi  <-   read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year), col_select=c('PATIENT_ID', 'BENE_DEATH_DT', 'VALID_DEATH_DT_SW', 'BENE_PTA_TRMNTN_CD', 'BENE_PTB_TRMNTN_CD', sprintf('MDCR_STATUS_CODE_%02d', 1:12), 'BENE_HI_CVRAGE_TOT_MONS', 'BENE_SMI_CVRAGE_TOT_MONS', 'BENE_ENROLLMT_REF_YR'))
+        mbsfi  <-   read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year), col_select=c('PATIENT_ID', 'BENE_DEATH_DT', 'VALID_DEATH_DT_SW', 'BENE_PTA_TRMNTN_CD', 'BENE_PTB_TRMNTN_CD',sprintf('HMO_IND_%02d', 1:12), sprintf('MDCR_STATUS_CODE_%02d', 1:12), 'BENE_HI_CVRAGE_TOT_MONS', 'BENE_SMI_CVRAGE_TOT_MONS', 'BENE_ENROLLMT_REF_YR'))
         # inner join with the SEER patients to reduce size
         mbsfs[[year]]  <-  mbsfi %>% inner_join(lung.SEER.pids) 
     }
@@ -469,14 +470,44 @@ if ( ! file.exists (fn.RDS) ) {
 # Need to get the number of months pre-tx during which the patient was enrolled. 
 # One record per patient per month enrolled
 # https://resdac.org/cms-data/variables/medicare-status-code-january
-mbsf.long  <- mbsf  %>% select( PATIENT_ID,BENE_ENROLLMT_REF_YR,  MDCR_STATUS_CODE_01:MDCR_STATUS_CODE_12) %>% pivot_longer(MDCR_STATUS_CODE_01:MDCR_STATUS_CODE_12, names_to= 'month') %>%
-    filter(value != '00') %>% 
+mbsf.long  <- mbsf  %>%  select( PATIENT_ID,BENE_ENROLLMT_REF_YR,  MDCR_STATUS_CODE_01:MDCR_STATUS_CODE_12,HMO_IND_01:HMO_IND_12)  %>% rename_with(
+                                     .fn = ~ gsub("MDCR_STATUS_CODE", "MDCRSTATUSCODE", .x),
+                                     .cols = starts_with("MDCR_STATUS_CODE")
+                                     ) %>%
+                            rename_with(
+                                        .fn = ~ gsub("HMO_IND", "HMOIND", .x),
+                                        .cols = starts_with("HMO_IND")
+                            )
+      
+mbsf.long.ffs  <- mbsf.long %>% pivot_longer(cols = -c(PATIENT_ID, BENE_ENROLLMT_REF_YR), names_to = c(".value", "month" ), names_sep="_" ) %>%
     mutate(year = BENE_ENROLLMT_REF_YR,
-           month = str_sub(month, -2),
            date = ceiling_date(ymd(sprintf('%d-%s-01', year, month)), 'month') - days(1))
-    mbsf.long  <-  mbsf.long %>% right_join(patient.tx %>% select( PATIENT_ID, tx.date))
-    mbsf.pre.tx.months <- mbsf.long %>% group_by(PATIENT_ID) %>% summarise( pre.tx.months = sum( (date < tx.date)) )
+table( mbsf.long.ffs$MDCRSTATUSCODE != '00', mbsf.long.ffs$HMOIND %in% c(0,4), useNA="ifany")
 
+#     # filter(value != '00') %>% 
+#     mutate(year = BENE_ENROLLMT_REF_YR,
+#            month = str_sub(month, -2),
+#            date = ceiling_date(ymd(sprintf('%d-%s-01', year, month)), 'month') - days(1))
+##https://resdac.org/articles/identifying-medicare-managed-care-beneficiaries-master-beneficiary-summary-or-denominator
+#table( mbsf.long.ffs$value, useNA="ifany")/ nrow(mbsf.long.ffs) %>%
+#mbsf.long.ffs  <- mbsf  %>% select( PATIENT_ID,BENE_ENROLLMT_REF_YR,  HMO_IND_01:HMO_IND_12) %>% pivot_longer(HMO_IND_01:HMO_IND_12, names_to= 'month') %>%
+#    filter(value %in% c(0, 4)) %>% 
+#    mutate(year = BENE_ENROLLMT_REF_YR,
+#           month = str_sub(month, -2),
+#           date = ceiling_date(ymd(sprintf('%d-%s-01', year, month)), 'month') - days(1))
+
+## Keep only months that are enrolled and also are not in an HMO
+# # mbsf.long.mcdf.ffs  <- mbsf.long.ffs %>%left_join(mbsf.long, by = c('PATIENT_ID', 'BENE_ENROLLMT_REF_YR', 'month'))
+# # mbsf.long.mcdf.ffs  <- mbsf.long
+mbsf.pre.tx.months <- mbsf.long.ffs %>% right_join(patient.tx %>% select( PATIENT_ID, tx.date)) %>% 
+                            filter (HMOIND %in% c(0,4) ) %>% 
+                            group_by(PATIENT_ID) %>% summarise( pre.tx.months = sum( (date < tx.date))  )
+# table( mbsf.pre.tx.months$pre.tx.months , useNA="ifany")
+# summary( mbsf.pre.tx.months$pre.tx.months)
+# table( mbsf.pre.tx.months$pre.tx.months > 12, useNA="ifany")
+# mbsf.pre.tx.months %>% filter ( pre.tx.months == 3)
+# mbsf.long.ffs %>% filter (PATIENT_ID == 'lnK2020w0436834') %>% print(n=Inf)
+# A %>% filter (PATIENT_ID == 'lnK2020w0436834') %>% glimpse
 patient.mbsf <- mbsf %>% mutate( 
                         death.date.mbsf.temp = ifelse(mbsf$BENE_DEATH_DT!= "", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd ) %>% 
                         group_by( PATIENT_ID) %>% 
@@ -658,23 +689,20 @@ histology =  case_when(
 ################################
 # A large number of SEER patients underwent surgery based on the seer.surgery variable which are not included, as they were note enrolled in Medicare at the time of treatment. Recall that SEER includes non Medicare patietns as well. 
 incex  <-  function ( A.frame ) {
-    print(sprintf('%d (SR: %d, SBRT: %d)', nrow(A.frame), sum(A.frame$tx == 'sublobar'), sum(A.frame$tx == 'sbrt')))
+    print(sprintf('%d (SR: %d, SBRT: %d)', nrow(A.frame), sum(A.frame$tx == 'sublobar',na.rm = T), sum(A.frame$tx == 'sbrt', na.rm =T)))
 }
 print(nrow(A))
-table( A$histology, useNA="ifany")
 A.final  <- A %>% filter ( histology !="Small cell" & histology != 'Other' & histology != 'Carcinoid' & histology != 'Adenosquamous' & histology != 'Large cell' & histology != 'Non-small cell carcinoma' )
- # A.final  <- A %>% filter ( histology !="Small cell" & histology != 'Other' & histology != 'Carcinoid' & histology != 'Large cell' & histology != 'Non-small cell carcinoma' )
-print(nrow(A.final))
+incex(A.final)
 A.final  <-  A.final %>% filter ( (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c") & tnm.n==0 & tnm.m==0 )
-print(nrow(A.final))
- A.final  <-  A.final %>% filter (tx %in% c('sublobar', 'sbrt') )
+incex(A.final)
+A.final  <-  A.final %>% filter (tx %in% c('sublobar', 'sbrt') )
 A.final$tx  <- droplevels(A.final$tx)
 incex(A.final)
-A.final %>% filter ( tx  == 'sublobar') %>% count (RX_SUMM_SURG_RAD_SEQ)
 A.final  <-  A.final %>% filter (
                                  (tx == 'sbrt' & ( is.na(RADIATION_RECODE) | RADIATION_RECODE == 1) & (is.na( RX_SUMM_SURG_PRIM_SITE_1998) | RX_SUMM_SURG_PRIM_SITE_1998 == 0)  )  |
                                  ( tx == 'sublobar' & ( is.na( RX_SUMM_SURG_PRIM_SITE_1998) |  RX_SUMM_SURG_PRIM_SITE_1998 %in% c(20, 21, 22, 23 ) ) & (is.na(RADIATION_RECODE) | RADIATION_RECODE == 0) )
-                             )
+ )
 incex(A.final)
 A.final <- A.final %>% filter( RX_SUMM_SYSTEMIC_SURG_SEQ == 0)
 incex(A.final)
@@ -682,24 +710,30 @@ A.final  <-  A.final %>% filter (age >= 65 )
 incex(A.final)
 A.final  <-  A.final %>% filter (dx.to.tx <= 135 & dx.to.tx >= -16) # The diagnosis date is chosen to be the 15th of each month, as the date itself is not available
 incex(A.final)
-# summary(A.final$dx.to.tx)
-A.final  <-  A.final %>% filter (pre.tx.months >= 12)
+A.final  <-  A.final %>% filter (pre.tx.months >= 12 | is.na(tx))
 incex(A.final)
 A.final  <-  A.final %>% filter ((valid.pet.scan & tx=='sbrt') | tx=='sublobar')
 incex(A.final)
 A.final  <-  A.final %>% filter (valid.death.indicator == 'valid' )
 incex(A.final)
 A.final  <-  A.final %>% filter (microscopically_confirmed)
-incex(A.final)
-table( A.final$histology, useNA="ifany")
+A.final %>% filter ( tx  == 'sublobar') %>% count (RX_SUMM_SURG_RAD_SEQ)
+# incex(A.final)
+# # summary(A.final$dx.to.tx)
+# incex(A.final)
+# table( A.final$histology, useNA="ifany")
 
-table( A.final$RX_SUMM_SYSTEMIC_SURG_SEQ,A.final$CHEMOTHERAPY_RECODE_YES_NO_UNK, useNA="ifany")
-table( A.final$histology, useNA="ifany")
+# table( A.final$RX_SUMM_SYSTEMIC_SURG_SEQ,A.final$CHEMOTHERAPY_RECODE_YES_NO_UNK, useNA="ifany")
+# table( A.final$histology, useNA="ifany")
 
 # data.frame ( A.final$YEAR_THERAPY_STARTED, A.final$MONTH_OF_DIAGNOSIS, A.final$tx.date)
 
+#TODO: GCL
+# RX_Summ_Scope_Reg_LN_Sur_2003
 
-A.final  %>%  write_rds( 'data/A.final27.all.gte.65.RDS' )
+A.final  %>%  write_rds( 'data/A.final31.all.gte.65.RDS' )
+
+table (A.final$cod.new)
 
 
 table( A.final$arthropathy_pre_month_count, useNA="ifany")
@@ -756,6 +790,49 @@ table( A.final$tx, A.final$REASONNOCANCER_DIRECTED_SURGERY, useNA="ifany")
 # Confirm that the month/year therapy started are somewhat consistent
 # A.final %>% filter(PATIENT_ID == 
 
+# with(A.final  ,     table( tx, RX_SUMM_SURG_PRIM_SITE_1998 , useNA="ifany"))
+# with(A.final %>% filter (nna(first.month.coverage)) ,     table( tx, RX_SUMM_SURG_PRIM_SITE_1998 , useNA="ifany"))
+
+##begin TODELETE
+#    table( A.final$tx, A.final$PRIMARY_PAYER_AT_DX , useNA="ifany")
+#    table( A.final$tx, A.final$RADIATION_RECODE, useNA="ifany")
+#with(A.final %>% filter (nna(first.month.coverage)) ,     table( tx, RX_SUMM_SURG_PRIM_SITE_1998 , useNA="ifany"))
+#    A.final %>% filter ( RX_SUMM_SURG_PRIM_SITE_1998 == 21  & is.na(tx))  %>% select(PATIENT_ID, dx.date) %>%  print(width=Inf, n=30)
+#    A.final %>% filter ( RX_SUMM_SURG_PRIM_SITE_1998 == 33  & is.na(lobar.date))  %>% select(PATIENT_ID, dx.date) %>%  print(width=Inf, n=30)
+#              0   12   13   15   19   20   21   22   23   24   25   30   33   45   46   55   56   65   70   80   90   99
+#  sublobar   75    2    0    0    0    8 1653  553    4    0    0  197  900   21    3    2    5    1    1    0    4    0
+#  sbrt     2350    3    1    6    0    0    9    2    0    0    0    2    3    0    0    0    0    0    0    0    2    5
+#  lobar      58    0    0    0    0    5  152   44    4    0    0  702 3735   83    2    1    7    0    0    1    3    2
+#  <NA>     3171   23    4   23    1    4  358   65    4    4    2  256 1380   23    2    2   20    1    0    0    4   20
+#    A.final %>%filter ( PATIENT_ID == 'lnK2020w0028319') %>% t
+#    medpar %>% filter ( PATIENT_ID == 'lnK2020w0028319') %>% t
+#    outpat %>% filter ( PATIENT_ID == 'lnK2020w0266908')
+#    mbsf.2016  <-   read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year))
+#    mbsf.2016 %>% print(width=Inf)
+#    mbsf.2016 %>% filter( PATIENT_ID == 'lnK2020w0266908') %>% select(contains('HMO')) %>%  t
+#    mbsf.2016 %>% filter( PATIENT_ID == 'lnK2020w0113668') %>% select(contains('HMO')) %>%  t
+#    mbsf %>% filter ( PATIENT_ID == 'lnK2020w0028319') %>% print(width=Inf)
+
+
+
+#    A.final %>%filter ( PATIENT_ID == 'lnK2020w0113668') %>% t
+#MONTH_OF_DIAGNOSIS                          "7"                        
+#YEAR_OF_DIAGNOSIS                           "2016"                     
+#RX_SUMM_SURG_PRIM_SITE_1998                 "21"                       
+#MONTH_OF_LAST_FOLLOW_UP_RECODE              "01"                       
+#YEAR_OF_LAST_FOLLOW_UP_RECODE               "2018"                     
+#MONTH_THERAPY_STARTED                       "09"                       
+#YEAR_THERAPY_STARTED                        "2016"                     
+#    medpar %>% filter ( PATIENT_ID == 'lnK2020w0113668') %>% t
+#    carrier %>% filter ( PATIENT_ID == 'lnK2020w0113668') %>% print(n= Inf)
+#    mbsf %>% filter ( PATIENT_ID == 'lnK2020w0113668') %>% print(n= Inf)
+
+    #TODO: What is the survival variable of SEER?
+    # A.final %>%filter ( PATIENT_ID == 'lnK2020w0067344') %>% t
+
+    # outpat.outpat.revenue %>% filter ( PATIENT_ID == 'lnK2020w0113668') 
+# end TODELETE
+
 
 
 
@@ -809,6 +886,15 @@ incex(A.final.sens1)
 A.final.sens1  <-  A.final.sens1 %>% filter (microscopically_confirmed)
 sum(A.final.sens1$tx == 'sublobar' & A.final.sens1$tnm.n %in% c('1','2','3')) / sum(A.final.sens1$tx == 'sublobar')
 table( A.final.sens1$RX_SUMM_SYSTEMIC_SURG_SEQ, useNA="ifany")
+table( A.final$tx, useNA="ifany")
+A.final.sens1 %>% filter(tx == 'sublobar' ) %>% count(tnm.n,RX_SUMM_SCOPE_REG_LN_SUR_2003)
+(A.final.sens1 %>% filter(tx == 'sublobar' ) %>% nrow)
+A.final.sens1 %>%  filter(tx == 'sublobar' ) %>% 
+sum(A.final.sens1$tx == 'sublobar' & A.final.sens1$RX_SUMM_SCOPE_REG_LN_SUR_2003 ==0) / sum(A.final.sens1$tx == 'sublobar')
+
+%>% summarise 
+table( A.final$tx, useNA="ifany")
+
 A.final.sens1  %>%  write_rds( 'data/A.final27.sens1.RDS' )
 
 
