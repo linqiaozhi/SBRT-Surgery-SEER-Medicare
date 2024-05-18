@@ -9,7 +9,7 @@ library(tidyverse)
 
 # This file seems to only have DME
 CPT_Codes  <-  read_csv('CPT_Codes_2020.csv') %>% rename(HCPC=`HCPC/MOD`, short_desc = `SHORT DESCRIPTION`, long_desc=`LONG DESCRIPTION`) %>% select( HCPC, long_desc)
-CPT_Codes_2  <-  read_csv('CPT_Codes_2.csv') %>% select( HCPC, long_desc)
+CPT_Codes_2  <-  read_csv('CPT_codes_2.csv') %>% select( HCPC, long_desc)
 deprecated.codes  <- do.call (rbind, list(c('77373', 'Under Stereotactic Radiation Treatment Delivery'),
             c('61793'  ,'Stereotactic radiosurgery (particle beam, gamma ray or linear accelerator), one or more sessions'),
             c('0082T', 'Stereotactic rad delivery') ))
