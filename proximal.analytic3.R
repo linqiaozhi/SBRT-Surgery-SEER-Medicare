@@ -1,3 +1,5 @@
+# devtools::install('../pci2s_gcl/pci2s')
+# devtools::load_all('../pci2s_gcl/pci2s')
 library(pci2s)
 library(dplyr)
 library(MASS)
@@ -131,13 +133,13 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, Xs, Y.count.b
     if (Y.count.bool) {
         A.temp  <- A.temp %>% mutate( Y.count  = !!rlang::sym(outcome.name),)
         Y_ = A.temp$Y.count
-        out.model  <- pcinb2s(Y = Y_, offset= offset_,  A = A_, X = X_,
-                              W = W_, Z = Z_, nboot = B,
+        out.model  <- pci.negbin(Y = Y_, offset= offset_,  A = A_, X = X_,
+                              W = W_, Z = Z_, 
                               Xw = Xw,        
                               nco_type = c("ah", rep("negbin", length(noc.names.temp))),
                               nco_args = append( list(list(offset = rep(0, N_), event = D2_)),
                                                 replicate (length(noc.names.temp),  list(offset = offset_, init = NA), simplify=F)),
-                              se_method= 'analytic')
+                              )
     }
     if(!Y.count.bool){
         A.temp  <- A.temp %>% mutate(
@@ -150,20 +152,18 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, Xs, Y.count.b
             print('Not using other cause mortality in the W set')
             Xw =  replicate (length(noc.names.temp),   list(as.matrix(cbind(1, A_, X_, Z_ ))))
             W_ <- cbind(  A.temp[,noc.names.temp])
-            out.model  <- pciah2s(Y = Y_, D = D_,  A = A_, X = X_,
-                                  W = W_, Z = Z_, nboot = B,
+            out.model  <- pci.ah(Y = Y_, D = D_,  A = A_, X = X_,
+                                  W = W_, Z = Z_, 
                                   Xw = Xw,        
                                   nco_type =  rep("negbin", length(noc.names.temp)),
-                                  nco_args =  replicate (length(noc.names.temp),  list(offset = offset_, init = NA), simplify=F),
-                                  se_method= 'analytic')
+                                  nco_args =  replicate (length(noc.names.temp),  list(offset = offset_, init = NA), simplify=F))
         }else {
-            out.model  <- pciah2s(Y = Y_, D = D_,  A = A_, X = X_,
-                                  W = W_, Z = Z_, nboot = B,
+            out.model  <- pci.ah(Y = Y_, D = D_,  A = A_, X = X_,
+                                  W = W_, Z = Z_,
                                   Xw = Xw,        
                                   nco_type = c("ah", rep("negbin", length(noc.names.temp))),
                                   nco_args = append( list(list(offset = rep(0, N_), event = D2_)),
-                                                    replicate (length(noc.names.temp),  list(offset = offset_, init = NA), simplify=F)),
-                                  se_method= 'analytic')
+                                                    replicate (length(noc.names.temp),  list(offset = offset_, init = NA), simplify=F)))
         }
     }
     return(out.model)
@@ -197,8 +197,8 @@ for (outcome.i in 1:length(Ws)){
     # Proximal
     noc.names.temp  <- setdiff( Ws, c(outcome.name))
     mout  <-  two.step(A.final, Zs,  outcome.name, noc.names.temp, Xs,Y.count.bool =T, verbose=F)
-    est <- mout$ESTIMATE[2]
-    se  <- mout$SE[2]
+    est <- mout$ESTIMATE['A']
+    se  <- mout$SE['A']
     odds.ratios.nocs.proximal[outcome.i,1:3]  <-  exp(c( est, est- 1.96*se, est + 1.96*se ))
     print(odds.ratios.nocs[outcome.i,1:3])
     print(odds.ratios.nocs.adj[outcome.i,1:3])
@@ -234,9 +234,9 @@ for (outcome.i in 1:length(outcome.names)){
         mout  <-  two.step( A.final, Zs,  outcome.name, Ws, Xs, skip.W1=F)
     }
     est <- mout$ESTIMATE[1]
-     se  <- mout$SE[1]
-   hazard.differences.outcomes.proximal[outcome.i,1:3]  <-  c(est, est - 1.96*se, est + 1.96*se)
-   print(hazard.differences.outcomes.proximal[outcome.i,1:3])
+    se  <- mout$SE[1]
+    hazard.differences.outcomes.proximal[outcome.i,1:3]  <-  c(est, est - 1.96*se, est + 1.96*se)
+    print(hazard.differences.outcomes.proximal[outcome.i,1:3])
 } 
 
 
