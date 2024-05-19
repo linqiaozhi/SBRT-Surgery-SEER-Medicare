@@ -16,7 +16,7 @@ M_U = diag(N) - Usvd$u %*% t(Usvd$u)
 # orthogonal_noise = M_U%*% rnorm(N)
 W  <-  alpha1 * U + sig1 * e1 # Negative control exposure
  # W2  <-  alpha1 * U + sig5 *orthogonal_noise/norm(orthogonal_noise, type='2')*norm(e1, type='2') # Negative control exposure
- W2  <-  alpha1 * U + rnorm(N)
+W2  <-  alpha1 * U + rnorm(N)
 Z  <-  alpha4 * U + sig4 * e4 # Negative control outcome
 
 A  <-  alpha2*U + sig2*e2     # Treatment
@@ -28,11 +28,11 @@ lmout <- lm ( Y~ A)
 abs(beta_ - (coef(lmout)[['A']]))/ beta_  #0.38
 
 lmout <- lm ( Y~ e2)
-abs(beta_ - (coef(lmout)[['A']]))/ beta_  #0.38
+abs(beta_ - (coef(lmout)[['e2']]))/ beta_  
 
 # Oracle
 lmout <- lm ( Y~ A + U)
-abs(beta_ - (coef(lmout)[['A']]))/ beta_  #0.004
+abs(beta_ - (coef(lmout)[['A']]))/ beta_ 
 
 
 # e2svd  <- svd(cbind(e2))
@@ -71,6 +71,68 @@ W_hat_O  <-  predict(step1_O)
 step2_O  <-  lm( Y ~ W_hat_O + A )
 abs(beta_ - (coef(step2_O)[['A']])) / beta_ 
 cor( make.M(cbind(W_hat_O))%*%A, U)
+
+
+################################
+# A good way to presen it? 
+################################
+
+# Oracle case
+A_  <- make.M(cbind(U))%*%A
+Y_  <- make.M(cbind(U))%*%Y
+step2  <-  lm( Y_ ~  A_ )
+abs(beta_ - (coef(step2)[['A_']])) / beta_ 
+
+
+# Adjusted case
+A_  <- make.M(cbind(W,Z))%*%A
+Y_  <- make.M(cbind(W,Z))%*%Y
+step2  <-  lm( Y_ ~  A_ )
+abs(beta_ - (coef(step2)[['A_']])) / beta_ 
+cor(U, make.M(cbind(W,Z))%*% U)
+cor(U, make.M(cbind(W,Z))%*% A)
+
+
+# Proximal case
+step1  <-  lm(W ~ A + Z-1)
+W_hat  <-  predict(step1)
+A_  <- make.M(cbind(W_hat))%*%A
+Y_  <- make.M(cbind(W_hat))%*%Y
+step2  <-  lm( Y_ ~  A_ )
+abs(beta_ - (coef(step2)[['A_']])) / beta_ 
+cor(U, make.M(cbind(W_hat))%*% A)
+
+
+# U is a vector in R^n. A, W, and Z lie in a cone around U. 
+# The adjusted case: Project A and Y perpendicular to the plane formed by W and Z, and then perform your regression. 
+# The proximal case: Find W_hat, a vector on the plane formed by A and Z that is closest to W. Project A and Y perpendicular to W_hat, and then perform your regression.
+
+# Ideally: You project A orthogonal to U
+# But actually, we don't need all of U. All we really care about is the portion of U that is in the direction of A.
+#  we consider the plane spanned by A and Z, and then find the vector on that plane that is closest to W. This gives us a vector in that plane which is close to U and also in the span of A. This is effectively in the plane spanned by U and A
+
+cor (W_hat,A)
+
+
+I need to project Y onto A, but only after removing U from it.
+
+
+
+
+Can write U = A + W + Z
+
+
+# projecting to complement of What is so much better than projecting onto complement of W and Z.
+# I want to show that the part of U that is biasing the causal parameter is exactly What. 
+# A is a corrupted version of U. But it is now the only part of U that matters. 
+
+UminusA  <- make.M(cbind(A)) %*% U
+
+
+
+
+
+
 
 #U Is this 10,000 dimensional thing that has been corrupted by noise. I am now projecting it in a certain direction. 
 # U1 is if I project it toward A. 

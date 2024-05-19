@@ -19,7 +19,7 @@ set.seed(3)
 subset.name <- 'all.gte.65'
 # subset.name <- 'sens1'
 
-filename.in  <-  sprintf('data/A.final26.%s.RDS', subset.name)
+filename.in  <-  sprintf('data/A.final.%s.RDS', subset.name)
 A.final  <-  readRDS(filename.in)  %>% 
     mutate(treatment.year = year(tx.date),
             death.90.day = if_else ( ninety.day.mortality, death, as.Date(NA_character_)),
@@ -29,18 +29,19 @@ A.final  <-  readRDS(filename.in)  %>%
             pre.tx.days = pre.tx.months * 30.5,
     ) 
 A.final$tx  <-  droplevels(A.final$tx)
+table( A.final$tx, useNA="ifany")
 
 # preprocessing
+table( A.final$treatment.year, A.final$tx, useNA="ifany")
 table( A.final$race, useNA="ifany")
 table( A.final$histology, A.final$tx, useNA="ifany")
 A.final <- A.final %>% mutate( race2 = ifelse (race == 'White' , 'White', 'Other'),
                               treatment.year2 = as.character(treatment.year),
-                              treatment.year2 = (ifelse (treatment.year2 %in% c('2017', '2018'), '2017-2018', treatment.year2)),
+                              treatment.year2 = (ifelse (treatment.year2 %in% c('2019', '2020'), '2019-2020', treatment.year2)),
                                 histology2 = ifelse (grepl('Adeno', histology), 'Adenocarcinoma', 'Squamous cell'))
-t
-
-analysis.name  <-  'nb'
+# analysis.name  <-  'sens.with.rad'
 # analysis.name  <-  'sens1'
+ analysis.name  <-  'nb2020'
 # A.final  <-  A.final %>% 
  # filter(age >= 65 & age <= 80) 
 # A.final %>% filter (tx == 'sublobar') %>% group_by(tnm.n >0) %>% summarise(n = n()) %>% mutate( freq = n / sum(n) )
@@ -217,12 +218,10 @@ for (outcome.i in 1:length(outcome.names)){
     A.temp  <-  A.final %>% mutate( 
                            outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/ 365+ runif(dim(A.final)[1] ,0,1)*1e-8,,
                           outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
-        )
+        ) %>% filter (tnm.n ==0)
     # Raw
     f  <- as.formula('Surv(outcome.time, outcome.bool) ~ const(tx)')
     m  <-  aalen( f ,  data = A.temp, robust = 0)
-    f  <- as.formula('Surv(outcome.time, outcome.bool) ~ tx')
-    m2  <-  ah( f ,  data = A.temp, robust = 0, ties=0, verbose=T)
     hazard.differences.outcomes[outcome.i,1:3]  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
     # Adjust for X
     f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + %s',  paste(sprintf('const(%s)', c(Xs, Zs)), collapse="+") )
@@ -241,10 +240,9 @@ for (outcome.i in 1:length(outcome.names)){
 } 
 
 
-odds.ratios.nocs.proximal
 
 ## table( A.temp$arthropathy_pre_count, useNA="ifany")
-#A.temp %>% count(tx)
+A.final %>% count(tx)
 #################################
 ## Individual plots
 #################################
@@ -289,3 +287,7 @@ toprint  <- hazard.differences.outcomes.adj
 toprint  <- odds.ratios.nocs.proximal
 for (i in 1:nrow(toprint)) {
     cat( sprintf( '%s| %.2f (%.2f, %.2f)\n', label_list3[rownames(toprint)[i]], toprint[i,1], toprint[i,2], toprint[i,3]) ) }
+
+table( A.final$tnm.n, useNA="ifany")
+
+sum(A.final$tx == 'sublobar' & A.final$tnm.n %in% c('1','2','3')) / sum(A.final$tx == 'sublobar')

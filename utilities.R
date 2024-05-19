@@ -142,7 +142,7 @@ get.dates.of.dx  <-  function( A, proc.codes ) {
 
 
 make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
-    xlims <- c(0.45, 3)
+    xlims <- c(0.3, 3)
     tt  <-  ifelse (hazard, 'Hazard Ratio (log scale)', 'Hazard Ratio (log scale)')
     # row.names(odds.ratios_) <- gsub("_pre_month_count", "", row.names(odds.ratios_))
      row.names(odds.ratios_) <- gsub("_..._count", "",  row.names(odds.ratios_))
