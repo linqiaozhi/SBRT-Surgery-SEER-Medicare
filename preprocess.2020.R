@@ -478,29 +478,37 @@ mbsf.long  <- mbsf  %>%  select( PATIENT_ID,BENE_ENROLLMT_REF_YR,  MDCR_STATUS_C
                                         .fn = ~ gsub("HMO_IND", "HMOIND", .x),
                                         .cols = starts_with("HMO_IND")
                             )
-      
 mbsf.long.ffs  <- mbsf.long %>% pivot_longer(cols = -c(PATIENT_ID, BENE_ENROLLMT_REF_YR), names_to = c(".value", "month" ), names_sep="_" ) %>%
     mutate(year = BENE_ENROLLMT_REF_YR,
            date = ceiling_date(ymd(sprintf('%d-%s-01', year, month)), 'month') - days(1))
 mbsf.pre.tx.months <- mbsf.long.ffs %>% right_join(patient.tx %>% select( PATIENT_ID, tx.date)) %>% 
-                            filter (HMOIND %in% c(0,4) ) %>% 
-                            group_by(PATIENT_ID) %>% summarise( pre.tx.months = sum( (date < tx.date))  )
+                            mutate (ffs.month = HMOIND %in% c(0,4) ) %>% 
+                            group_by(PATIENT_ID) %>% summarise( 
+                                                                pre.tx.months = sum(ffs.month & (date < tx.date)),
+                                                                total.ffs.months = sum(ffs.month)  )
 patient.mbsf <- mbsf %>% mutate( 
-                        death.date.mbsf.temp = ifelse(mbsf$BENE_DEATH_DT!= "", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd ) %>% 
+                        death.date.mbsf.temp = ifelse(mbsf$BENE_DEATH_DT!= "" & mbsf$BENE_DEATH_DT != "       .", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd ) %>% 
                         group_by( PATIENT_ID) %>% 
                         summarise( 
                                   death.date.mbsf = first(na.omit(death.date.mbsf.temp))
                             ) %>%
                         right_join(mbsf.pre.tx.months)
+# table( mbsf.pre.tx.months$total.ffs.months, useNA="ifany")
 
-
+# mbsf.long.ffs %>% filter ( PATIENT_ID == "lnK2020V0001428")
+# fofo  <- mbsf %>%  mutate( death.date.mbsf.temp = ifelse(mbsf$BENE_DEATH_DT!= "" & mbsf$BENE_DEATH_DT != "       .", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd )
+# fofo %>% count(death.date.mbsf.temp, BENE_DEATH_DT, BENE_ENROLLMT_REF_YR) %>% print(n=Inf)
+# table( fofo$death.date.mbsf.temp, fofo$BENE_DEATH_DT, useNA="ifany")
 
 ################################
 # Section VII Combine 
 ################################
-summary( A$HISTOLOGIC_TYPE_ICD_O_3)
-summary( A$DERIVEDSEERCOMBINED_T_2016_2017)
 topography  <-  read_csv(file= './ICDO3topography.csv') %>% rename(site.topography = description) %>% mutate(PRIMARY_SITE = str_remove_all( icdo3_code, fixed(".")))
+# Note that each of the patient.* data frames were filtered to only include
+# patients who underwent treatment (i.e. filtered by patient.tx). Thus SEER
+# includes many more patients than those in the patient.* data frames, so many
+# fields will be NA in this join, simply because those patients were not
+# preprocessed in the above code.
 A  <-  patient.seer %>% 
     left_join( patient.dx, by = 'PATIENT_ID') %>% 
     left_join( patient.outpatient.procs, by = 'PATIENT_ID',) %>% 
@@ -620,7 +628,8 @@ histology =  case_when(
                                   (size>=5 & size<7) | (tnm.t=='3' & size<7) ~ 'T3',
                                   (size >=7 & size<100) | tnm.t=='4'  ~ 'T4',
                                   T ~ NA_character_),
-           dx.date = ymd( ifelse ( nna(YEAR_OF_DIAGNOSIS) & nna(MONTH_OF_DIAGNOSIS) , sprintf('%s%sd15', YEAR_OF_DIAGNOSIS, MONTH_OF_DIAGNOSIS), NA_character_ ) )  ,
+           dx.date =  ymd(ifelse ( YEAR_OF_DIAGNOSIS != "" & MONTH_OF_DIAGNOSIS != "" , sprintf('%s%s15', YEAR_OF_DIAGNOSIS, MONTH_OF_DIAGNOSIS), NA_character_ ) )  ,
+           dx.date.fofo =  ifelse ( YEAR_OF_DIAGNOSIS != "" & MONTH_OF_DIAGNOSIS != "" , sprintf('%s%s15', YEAR_OF_DIAGNOSIS, MONTH_OF_DIAGNOSIS), NA_character_ )   ,
            #cod.new = case_when(
            ## Note that for a SEQUENCE_NUMBER 0 cancer, the cause of death might
            #    # be listed as a different type of cancer, but
@@ -653,20 +662,38 @@ histology =  case_when(
                        dx.to.tx  =  as.numeric( tx.date - dx.date, units = 'days'),
                        death.date.seer = 
                            ymd( ifelse ( ""!=(SEER_DATEOFDEATH_YEAR) & ""!=(SEER_DATEOFDEATH_MONTH) , sprintf('%s%s15', SEER_DATEOFDEATH_YEAR, SEER_DATEOFDEATH_MONTH), NA_character_ ) )  ,
-                       tt = as.numeric( if_else ( nna(death.date.mbsf), death.date.mbsf, ymd('20191231')  ) - tx.date, units = 'days'),
+                       tt = as.numeric( if_else ( nna(death.date.mbsf), death.date.mbsf, ymd('20201231')  ) - tx.date, units = 'days'),
                        thirty.day.mortality = ifelse ( nna(death.date.mbsf) & tt < 30, T, F ) ,
                        ninety.day.mortality = ifelse ( nna(death.date.mbsf) & tt < 90, T, F ) ,
-                       death = death.date.mbsf, valid.death.indicator = case_when(
-                                 is.na(death.date.seer) & is.na( death.date.mbsf)  ~ 'valid', # not death in either
-                                 nna(death.date.seer) & nna( death.date.mbsf)  ~ 'valid', # dead in both
-                                 nna(death.date.seer) & is.na( death.date.mbsf) ~ 'invalid', # Dead in SEER but not in MBSF is invalid
-                                 nna(death.date.mbsf) & is.na( death.date.seer)  & year(death.date.mbsf) == 2019 ~ 'valid', # Dead in MBSF but not in SEER is valid if it occured in 2019
-                                 nna(death.date.mbsf) & is.na( death.date.seer)  & year(death.date.mbsf) < 2019 ~ 'invalid', # Dead in MBSF but not in SEER is invalid if it occured <2019
-                                                         ))
+                       death = death.date.mbsf, 
+                       valid.death.indicator = is.na (death.date.seer) == is.na(death.date.mbsf) )
+                                                         
+    # A %>% filter (tx %in% c('sublobar', 'sbrt') )  %>% count(nna(death.date.mbsf),nna( death.date.seer))
+
+    # A %>% filter (tx %in% c('sublobar', 'sbrt') & nna(death.date.seer) & is.na(death.date.mbsf) ) %>% select(PATIENT_ID) %>% glimpse
+
+    # A %>% count (year(death.date.seer))
+    # A %>% filter (tx %in% c('sublobar', 'sbrt') & is.na(death.date.seer) & nna(death.date.mbsf) ) %>% count(year(death.date.mbsf))
+    # mbsf %>% filter (PATIENT_ID == 'lnK2020V8357075') %>%glimpse
+    # A %>% filter (PATIENT_ID == 'lnK2020V8357075') %>% glimpse
+
+    
+    # table( A$death.date.mbsf, useNA="ifany")
     # A %>% filter(tnm.t==1) %>% count(DERIVED_SEER_COMBINED_T_2016)
 
-table( A$YEAR_OF_DIAGNOSIS,A$RADIATION_RECODE, useNA="ifany")
-table( A$dx.date, useNA="ifany")
+# A %>% group_by(YEAR_OF_DIAGNOSIS) %>% summarise( mean(nna(death)))
+
+    # table(  nna(A$death.date.mbsf), nna(A$death.date.seer), A$YEAR_OF_DIAGNOSIS, useNA="ifany")
+    # table( year(A$death.date.mbsf), year(A$death.date.seer), useNA="ifany")
+    # A %>% filter ( nna(death.date.seer) & is.na(death.date.mbsf))  %>% glimpse
+    # mbsf %>% filter (PATIENT_ID == 'lnK2020V0001428') %>% glimpse
+    # %>% count(total.ffs.months) %>% print(n=Inf)
+    # %>% count(YEAR_OF_DIAGNOSIS)
+    # table( A$tx.date, useNA="ifany")
+# table( A$YEAR_OF_DIAGNOSIS,A$RADIATION_RECODE, useNA="ifany")
+# table( A$valid.death.indicator, is.na(A$death.date.seer),is.na(A$death.date.mbsf) , useNA="ifany")
+
+    table( nna(A$death.date.seer), nna(A$death.date.mbsf), useNA="ifany")
 ################################
 # Section IX  Exclusion
 ################################
@@ -688,21 +715,26 @@ A.final  <-  A.final %>% filter (
  )
 A.final <- A.final %>% filter( RX_SUMM_SYSTEMIC_SURG_SEQ == "0")
 incex(A.final)
-table( A$age, useNA="ifany")
 A.final  <-  A.final %>% filter (age >= 65 )
 incex(A.final)
 A.final  <-  A.final %>% filter (dx.to.tx <= 135 & dx.to.tx >= -16) # The diagnosis date is chosen to be the 15th of each month, as the date itself is not available
 incex(A.final)
-A.final  <-  A.final %>% filter (pre.tx.months >= 12 | is.na(tx))
+A.final  <-  A.final %>% filter (pre.tx.months >= 12 )
 incex(A.final)
 A.final  <-  A.final %>% filter ((valid.pet.scan & tx=='sbrt') | tx=='sublobar')
 incex(A.final)
-A.final  <-  A.final %>% filter (valid.death.indicator == 'valid' )
+table( A.final$dx.to.tx, useNA="ifany")
+
+
+
+table( A.final$valid.death.indicator, useNA="ifany")
+A.final  <-  A.final %>% filter (valid.death.indicator )
 incex(A.final)
 A.final  <-  A.final %>% filter (microscopically_confirmed)
-table( A.final$YEAR_OF_DIAGNOSIS, useNA="ifany")
 incex(A.final)
 #TODO: Cross each treatment variable iwth a year to make sure no errors
+table( A.final$YEAR_OF_DIAGNOSIS,A.final$O2accessories_pre_month_count, useNA="ifany")
+A.final %>% group_by(YEAR_OF_DIAGNOSIS) %>% summarise( mean(nna(death)))
 
 # incex(A.final)
 # # summary(A.final$dx.to.tx)
