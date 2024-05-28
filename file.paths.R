@@ -1,6 +1,6 @@
 #GCL example
 suffix  <- 's2018_2020'
-data.path  <- '/PHShome/gcl20/Research_Local/SEER-Medicare-data/data/SEER_Medicare/s2018_2020/'
+data.path  <- '/PHShome/gcl20/Research_Local/SEER-Medicare-data/s2018_2020/'
 dta.path  <- data.path
 rds.path  <- data.path
 

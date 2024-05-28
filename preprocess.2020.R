@@ -749,7 +749,7 @@ A.final %>% group_by(YEAR_OF_DIAGNOSIS) %>% summarise( mean(nna(death)))
 #TODO: GCL
 # RX_Summ_Scope_Reg_LN_Sur_2003
 
-A.final  %>%  write_rds( 'data/A.final.all.gte.65.RDS' )
+A.final  %>%  write_rds( 'data/A.final2.all.gte.65.RDS' )
 
 table (A.final$cod.new)
 
