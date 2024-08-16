@@ -703,8 +703,11 @@ incex  <-  function ( A.frame ) {
 }
 print(nrow(A))
 A.final  <- A %>% filter ( histology !="Small cell" & histology != 'Other' & histology != 'Carcinoid' & histology != 'Adenosquamous' & histology != 'Large cell' & histology != 'Non-small cell carcinoma' )
+table( A.final$histology, useNA="ifany")
+nrow(A.final)
 incex(A.final)
 A.final  <-  A.final %>% filter ( (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c") & tnm.n==0 & tnm.m==0 )
+nrow(A.final)
 incex(A.final)
 A.final  <-  A.final %>% filter (tx %in% c('sublobar', 'sbrt') )
 A.final$tx  <- droplevels(A.final$tx)
@@ -713,6 +716,7 @@ A.final  <-  A.final %>% filter (
                                  (tx == 'sbrt' & ( (RADIATION_RECODE == "") | RADIATION_RECODE == "1") & (( RX_SUMM_SURG_PRIM_SITE_1998 != "") | RX_SUMM_SURG_PRIM_SITE_1998 == "0")  )  |
                                  ( tx == 'sublobar' & ( ( RX_SUMM_SURG_PRIM_SITE_1998 == "") |  RX_SUMM_SURG_PRIM_SITE_1998 %in% c("20", "21", "22", "23" ) ) & ((RADIATION_RECODE =="") | RADIATION_RECODE == "0") )
  )
+incex(A.final)
 A.final <- A.final %>% filter( RX_SUMM_SYSTEMIC_SURG_SEQ == "0")
 incex(A.final)
 A.final  <-  A.final %>% filter (age >= 65 )
@@ -723,11 +727,6 @@ A.final  <-  A.final %>% filter (pre.tx.months >= 12 )
 incex(A.final)
 A.final  <-  A.final %>% filter ((valid.pet.scan & tx=='sbrt') | tx=='sublobar')
 incex(A.final)
-table( A.final$dx.to.tx, useNA="ifany")
-
-
-
-table( A.final$valid.death.indicator, useNA="ifany")
 A.final  <-  A.final %>% filter (valid.death.indicator )
 incex(A.final)
 A.final  <-  A.final %>% filter (microscopically_confirmed)
@@ -749,120 +748,119 @@ A.final %>% group_by(YEAR_OF_DIAGNOSIS) %>% summarise( mean(nna(death)))
 #TODO: GCL
 # RX_Summ_Scope_Reg_LN_Sur_2003
 
-A.final  %>%  write_rds( 'data/A.final2.all.gte.65.RDS' )
+A.final  %>%  write_rds( 'data/A.final3.all.gte.65.RDS' )
 
-table (A.final$cod.new)
-
-
-table( A.final$arthropathy_pre_month_count, useNA="ifany")
-table( A.final$pre.tx.months, useNA="ifany")
-/ nrow(A.final)
-
-A.final %>% count(histology.code,  histology, histology2) %>% arrange(-n) %>% write_csv('tbls/histology_codes.csv')
-
-table( A.final$histology2, useNA="ifany")
+#table (A.final$cod.new)
 
 
-################################
-# Testing 
-################################
+#table( A.final$arthropathy_pre_month_count, useNA="ifany")
+#table( A.final$pre.tx.months, useNA="ifany")
 
-table( A.final$tx, A.final$CHF_pre_date_count, useNA="ifany")
-A.final %>% filter (CHF_pre_count > 200) %>% glimpse
+#A.final %>% count(histology.code,  histology, histology2) %>% arrange(-n) %>% write_csv('tbls/histology_codes.csv')
 
-outpat %>% filter ( PATIENT_ID == 'lnK2020x9593394')
-fofo  <-  carrier %>% filter ( PATIENT_ID == 'lnK2020x9593394')  %>% mutate( desc = explain_code(LINE_ICD_DGNS_CD, condense =F ))
-%>% print(n=30, width=Inf)
+#table( A.final$histology2, useNA="ifany")
 
 
-A.final %>% group_by(tx, DIAGNOSTIC_CONFIRMATION) %>% tally()
-table(A.final$histology, A.final$microscopically_confirmed, useNA="ifany")
-table( A.final$FIRSTMALIGNANTPRIMARY_INDICATOR, useNA="ifany")
+#################################
+## Testing 
+#################################
 
-A.final %>% filter (dx.to.tx > 135) %>% select(PATIENT_ID, tx.date, tx, dx.date)
+#table( A.final$tx, A.final$CHF_pre_date_count, useNA="ifany")
+#A.final %>% filter (CHF_pre_count > 200) %>% glimpse
 
-
-A.final %>% filter ( nna(METS))  %>% pull(PATIENT_ID) %>% head
-A.final %>% filter ( nna(METS), is.na(cancer_nonlung_any)) %>% pull (PATIENT_ID) %>% head
-A.final %>% filter (PATIENT_ID == 'lnK2020w0043216') %>% print(width=Inf)
-
-dx.long %>% filter ( PATIENT_ID == 'lnK2020w0043216' , DX %in% dx.icd[['METS']]$icd9 | DX %in% dx.icd[['METS']]$icd10  ) 
-
-table( A.final$time.enrolled== 0, useNA="ifany")
-table( year(A.final$tx.date), useNA="ifany")
-
-table(nna(A.final$cancer_nonlung_any) , nna(A.final$METS))
-
-################################
-# Internal validity checks
-################################
-
-# We use the medicare codes to determine the cancer treatment. Make sure these agree with the SEER variables.
-# Confirm that 
-table( A.final$tx, A.final$RADIATION_RECODE, useNA="ifany")
-table( A.final$tx, A.final$seer.surgery, useNA="ifany")
-table( A.final$tx, A.final$RX_SUMM_SYSTEMIC_SURG_SEQ, useNA="ifany")
-table( A.final$tx, A.final$RX_SUMM_SURG_RAD_SEQ, useNA="ifany")
-table( A.final$tx, A.final$REASONNOCANCER_DIRECTED_SURGERY, useNA="ifany")
-
-# Confirm that the month/year therapy started are somewhat consistent
-# A.final %>% filter(PATIENT_ID == 
-
-# with(A.final  ,     table( tx, RX_SUMM_SURG_PRIM_SITE_1998 , useNA="ifany"))
-# with(A.final %>% filter (nna(first.month.coverage)) ,     table( tx, RX_SUMM_SURG_PRIM_SITE_1998 , useNA="ifany"))
-
-##begin TODELETE
-#    table( A.final$tx, A.final$PRIMARY_PAYER_AT_DX , useNA="ifany")
-#    table( A.final$tx, A.final$RADIATION_RECODE, useNA="ifany")
-#with(A.final %>% filter (nna(first.month.coverage)) ,     table( tx, RX_SUMM_SURG_PRIM_SITE_1998 , useNA="ifany"))
-#    A.final %>% filter ( RX_SUMM_SURG_PRIM_SITE_1998 == 21  & is.na(tx))  %>% select(PATIENT_ID, dx.date) %>%  print(width=Inf, n=30)
-#    A.final %>% filter ( RX_SUMM_SURG_PRIM_SITE_1998 == 33  & is.na(lobar.date))  %>% select(PATIENT_ID, dx.date) %>%  print(width=Inf, n=30)
-#              0   12   13   15   19   20   21   22   23   24   25   30   33   45   46   55   56   65   70   80   90   99
-#  sublobar   75    2    0    0    0    8 1653  553    4    0    0  197  900   21    3    2    5    1    1    0    4    0
-#  sbrt     2350    3    1    6    0    0    9    2    0    0    0    2    3    0    0    0    0    0    0    0    2    5
-#  lobar      58    0    0    0    0    5  152   44    4    0    0  702 3735   83    2    1    7    0    0    1    3    2
-#  <NA>     3171   23    4   23    1    4  358   65    4    4    2  256 1380   23    2    2   20    1    0    0    4   20
-#    A.final %>%filter ( PATIENT_ID == 'lnK2020w0028319') %>% t
-#    medpar %>% filter ( PATIENT_ID == 'lnK2020w0028319') %>% t
-#    outpat %>% filter ( PATIENT_ID == 'lnK2020w0266908')
-#    mbsf.2016  <-   read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year))
-#    mbsf.2016 %>% print(width=Inf)
-#    mbsf.2016 %>% filter( PATIENT_ID == 'lnK2020w0266908') %>% select(contains('HMO')) %>%  t
-#    mbsf.2016 %>% filter( PATIENT_ID == 'lnK2020w0113668') %>% select(contains('HMO')) %>%  t
-#    mbsf %>% filter ( PATIENT_ID == 'lnK2020w0028319') %>% print(width=Inf)
+#outpat %>% filter ( PATIENT_ID == 'lnK2020x9593394')
+#fofo  <-  carrier %>% filter ( PATIENT_ID == 'lnK2020x9593394')  %>% mutate( desc = explain_code(LINE_ICD_DGNS_CD, condense =F ))
+#%>% print(n=30, width=Inf)
 
 
+#A.final %>% group_by(tx, DIAGNOSTIC_CONFIRMATION) %>% tally()
+#table(A.final$histology, A.final$microscopically_confirmed, useNA="ifany")
+#table( A.final$FIRSTMALIGNANTPRIMARY_INDICATOR, useNA="ifany")
 
-#    A.final %>%filter ( PATIENT_ID == 'lnK2020w0113668') %>% t
-#MONTH_OF_DIAGNOSIS                          "7"                        
-#YEAR_OF_DIAGNOSIS                           "2016"                     
-#RX_SUMM_SURG_PRIM_SITE_1998                 "21"                       
-#MONTH_OF_LAST_FOLLOW_UP_RECODE              "01"                       
-#YEAR_OF_LAST_FOLLOW_UP_RECODE               "2018"                     
-#MONTH_THERAPY_STARTED                       "09"                       
-#YEAR_THERAPY_STARTED                        "2016"                     
-#    medpar %>% filter ( PATIENT_ID == 'lnK2020w0113668') %>% t
-#    carrier %>% filter ( PATIENT_ID == 'lnK2020w0113668') %>% print(n= Inf)
-#    mbsf %>% filter ( PATIENT_ID == 'lnK2020w0113668') %>% print(n= Inf)
+#A.final %>% filter (dx.to.tx > 135) %>% select(PATIENT_ID, tx.date, tx, dx.date)
 
-    #TODO: What is the survival variable of SEER?
-    # A.final %>%filter ( PATIENT_ID == 'lnK2020w0067344') %>% t
 
-    # outpat.outpat.revenue %>% filter ( PATIENT_ID == 'lnK2020w0113668') 
-# end TODELETE
+#A.final %>% filter ( nna(METS))  %>% pull(PATIENT_ID) %>% head
+#A.final %>% filter ( nna(METS), is.na(cancer_nonlung_any)) %>% pull (PATIENT_ID) %>% head
+#A.final %>% filter (PATIENT_ID == 'lnK2020w0043216') %>% print(width=Inf)
+
+#dx.long %>% filter ( PATIENT_ID == 'lnK2020w0043216' , DX %in% dx.icd[['METS']]$icd9 | DX %in% dx.icd[['METS']]$icd10  ) 
+
+#table( A.final$time.enrolled== 0, useNA="ifany")
+#table( year(A.final$tx.date), useNA="ifany")
+
+#table(nna(A.final$cancer_nonlung_any) , nna(A.final$METS))
+
+#################################
+## Internal validity checks
+#################################
+
+## We use the medicare codes to determine the cancer treatment. Make sure these agree with the SEER variables.
+## Confirm that 
+#table( A.final$tx, A.final$RADIATION_RECODE, useNA="ifany")
+#table( A.final$tx, A.final$seer.surgery, useNA="ifany")
+#table( A.final$tx, A.final$RX_SUMM_SYSTEMIC_SURG_SEQ, useNA="ifany")
+#table( A.final$tx, A.final$RX_SUMM_SURG_RAD_SEQ, useNA="ifany")
+#table( A.final$tx, A.final$REASONNOCANCER_DIRECTED_SURGERY, useNA="ifany")
+
+## Confirm that the month/year therapy started are somewhat consistent
+## A.final %>% filter(PATIENT_ID == 
+
+## with(A.final  ,     table( tx, RX_SUMM_SURG_PRIM_SITE_1998 , useNA="ifany"))
+## with(A.final %>% filter (nna(first.month.coverage)) ,     table( tx, RX_SUMM_SURG_PRIM_SITE_1998 , useNA="ifany"))
+
+###begin TODELETE
+##    table( A.final$tx, A.final$PRIMARY_PAYER_AT_DX , useNA="ifany")
+##    table( A.final$tx, A.final$RADIATION_RECODE, useNA="ifany")
+##with(A.final %>% filter (nna(first.month.coverage)) ,     table( tx, RX_SUMM_SURG_PRIM_SITE_1998 , useNA="ifany"))
+##    A.final %>% filter ( RX_SUMM_SURG_PRIM_SITE_1998 == 21  & is.na(tx))  %>% select(PATIENT_ID, dx.date) %>%  print(width=Inf, n=30)
+##    A.final %>% filter ( RX_SUMM_SURG_PRIM_SITE_1998 == 33  & is.na(lobar.date))  %>% select(PATIENT_ID, dx.date) %>%  print(width=Inf, n=30)
+##              0   12   13   15   19   20   21   22   23   24   25   30   33   45   46   55   56   65   70   80   90   99
+##  sublobar   75    2    0    0    0    8 1653  553    4    0    0  197  900   21    3    2    5    1    1    0    4    0
+##  sbrt     2350    3    1    6    0    0    9    2    0    0    0    2    3    0    0    0    0    0    0    0    2    5
+##  lobar      58    0    0    0    0    5  152   44    4    0    0  702 3735   83    2    1    7    0    0    1    3    2
+##  <NA>     3171   23    4   23    1    4  358   65    4    4    2  256 1380   23    2    2   20    1    0    0    4   20
+##    A.final %>%filter ( PATIENT_ID == 'lnK2020w0028319') %>% t
+##    medpar %>% filter ( PATIENT_ID == 'lnK2020w0028319') %>% t
+##    outpat %>% filter ( PATIENT_ID == 'lnK2020w0266908')
+##    mbsf.2016  <-   read_dta(sprintf('%s/mbsf.abcd.summary.%s.dta', data.path, year))
+##    mbsf.2016 %>% print(width=Inf)
+##    mbsf.2016 %>% filter( PATIENT_ID == 'lnK2020w0266908') %>% select(contains('HMO')) %>%  t
+##    mbsf.2016 %>% filter( PATIENT_ID == 'lnK2020w0113668') %>% select(contains('HMO')) %>%  t
+##    mbsf %>% filter ( PATIENT_ID == 'lnK2020w0028319') %>% print(width=Inf)
 
 
 
+##    A.final %>%filter ( PATIENT_ID == 'lnK2020w0113668') %>% t
+##MONTH_OF_DIAGNOSIS                          "7"                        
+##YEAR_OF_DIAGNOSIS                           "2016"                     
+##RX_SUMM_SURG_PRIM_SITE_1998                 "21"                       
+##MONTH_OF_LAST_FOLLOW_UP_RECODE              "01"                       
+##YEAR_OF_LAST_FOLLOW_UP_RECODE               "2018"                     
+##MONTH_THERAPY_STARTED                       "09"                       
+##YEAR_THERAPY_STARTED                        "2016"                     
+##    medpar %>% filter ( PATIENT_ID == 'lnK2020w0113668') %>% t
+##    carrier %>% filter ( PATIENT_ID == 'lnK2020w0113668') %>% print(n= Inf)
+##    mbsf %>% filter ( PATIENT_ID == 'lnK2020w0113668') %>% print(n= Inf)
 
-# A.fofo  <-  A.final2 %>% filter ( seer.surgery == 22 & is.na(tx) & PRIMARY_PAYER_AT_DX  == 60)
-# A.fofo  <-  A.final2 %>% filter (dx.to.tx < -30)
-# A.fofo  <-  A.final2  %>% filter (METS_pre_count >0 )
-# table( A.final2$tx, A.final2$REASONNOCANCER_DIRECTED_SURGERY, useNA="ifany")
-# table( A.final2$tx, A.final2$seer.surgery, useNA="ifany")
- # A.fofo %>% filter (PATIENT_ID == 'lnK2020w0153118') %>% glimpse
- # dx.long %>% filter (PATIENT_ID == 'lnK2020w0153118') %>% filter(tx.date > CLM_THRU_DT) %>%  count(DX) %>%arrange(-n) %>% print(n=100)
-# A.fofo %>% filter (PATIENT_ID == 'lnK2020w0176506') %>% glimpse
-# mbsf.long %>% filter (PATIENT_ID == 'lnK2020w0134942') %>% glimpse
+#    #TODO: What is the survival variable of SEER?
+#    # A.final %>%filter ( PATIENT_ID == 'lnK2020w0067344') %>% t
+
+#    # outpat.outpat.revenue %>% filter ( PATIENT_ID == 'lnK2020w0113668') 
+## end TODELETE
+
+
+
+
+## A.fofo  <-  A.final2 %>% filter ( seer.surgery == 22 & is.na(tx) & PRIMARY_PAYER_AT_DX  == 60)
+## A.fofo  <-  A.final2 %>% filter (dx.to.tx < -30)
+## A.fofo  <-  A.final2  %>% filter (METS_pre_count >0 )
+## table( A.final2$tx, A.final2$REASONNOCANCER_DIRECTED_SURGERY, useNA="ifany")
+## table( A.final2$tx, A.final2$seer.surgery, useNA="ifany")
+# # A.fofo %>% filter (PATIENT_ID == 'lnK2020w0153118') %>% glimpse
+# # dx.long %>% filter (PATIENT_ID == 'lnK2020w0153118') %>% filter(tx.date > CLM_THRU_DT) %>%  count(DX) %>%arrange(-n) %>% print(n=100)
+## A.fofo %>% filter (PATIENT_ID == 'lnK2020w0176506') %>% glimpse
+## mbsf.long %>% filter (PATIENT_ID == 'lnK2020w0134942') %>% glimpse
 
 
 ################################
@@ -870,36 +868,21 @@ table( A.final$tx, A.final$REASONNOCANCER_DIRECTED_SURGERY, useNA="ifany")
 ################################
 
 A.final.sens1  <- A %>% filter ( histology !="Small cell" & histology != 'Other' & histology != 'Carcinoid' & histology != 'Adenosquamous' & histology != 'Large cell' & histology != 'Non-small cell carcinoma' )
- # A.final.sens1  <- A %>% filter ( histology !="Small cell" & histology != 'Other' & histology != 'Carcinoid' & histology != 'Large cell' & histology != 'Non-small cell carcinoma' )
-A.final.sens1  <-  A.final.sens1 %>% filter ( (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c") & 
-                                             tnm.m ==0 &
-                                             ( (tx == 'sbrt' & tnm.n == 0 ) |
-                                               ( tx == 'sublobar' & tnm.n %in% c('0','1','2', '3') )
-                                           ) )
-
-A.final.
-
-
-
-
 A.final.sens1  <-  A.final.sens1 %>% filter ( (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c") & 
                                              tnm.m ==0 &
                                              ( (tx == 'sbrt' & tnm.n == 0 ) |
                                                ( tx == 'sublobar' & tnm.n %in% c('0','1','2', '3') )
                                            ) )
 print(nrow(A.final.sens1))
- A.final.sens1  <-  A.final.sens1 %>% filter (tx %in% c('sublobar', 'sbrt') )
+A.final.sens1  <-  A.final.sens1 %>% filter (tx %in% c('sublobar', 'sbrt') )
 A.final.sens1$tx  <- droplevels(A.final.sens1$tx)
 incex(A.final.sens1)
-A.final.sens1 %>% filter ( tx  == 'sublobar') %>% count (RX_SUMM_SURG_RAD_SEQ)
-A.final.sens1 %>% filter ( tx  == 'sublobar') %>% count (tnm.n,RADIATION_RECODE)
 A.final.sens1  <-  A.final.sens1 %>% filter (
-                                 (tx == 'sbrt' & ( is.na(RADIATION_RECODE) | RADIATION_RECODE == 1) & (is.na( RX_SUMM_SURG_PRIM_SITE_1998) | RX_SUMM_SURG_PRIM_SITE_1998 == 0)  )  |
-                                 # ( tx == 'sublobar' & ( is.na( RX_SUMM_SURG_PRIM_SITE_1998) |  RX_SUMM_SURG_PRIM_SITE_1998 %in% c(20, 21, 22, 23 ) ) & (is.na(RADIATION_RECODE) | RADIATION_RECODE %in% c( 0, 3)) )
+                                 (tx == 'sbrt' & ( (RADIATION_RECODE == "") | RADIATION_RECODE == "1") & (( RX_SUMM_SURG_PRIM_SITE_1998 != "") | RX_SUMM_SURG_PRIM_SITE_1998 == "0")  )  |
                                   ( tx == 'sublobar' & ( is.na( RX_SUMM_SURG_PRIM_SITE_1998) |  RX_SUMM_SURG_PRIM_SITE_1998 %in% c(20, 21, 22, 23 ) )  )
                              )
 incex(A.final.sens1)
-A.final.sens1 <- A.final.sens1 %>% filter(  ( tx == 'sbrt' & RX_SUMM_SYSTEMIC_SURG_SEQ == 0) | (tx == 'sublobar' & RX_SUMM_SYSTEMIC_SURG_SEQ %in% c(0, 3)))
+A.final.sens1 <- A.final.sens1 %>% filter(  ( tx == 'sbrt' & RX_SUMM_SYSTEMIC_SURG_SEQ == "0") | (tx == 'sublobar' & RX_SUMM_SYSTEMIC_SURG_SEQ %in% c("0", "3")))
 incex(A.final.sens1)
 A.final.sens1  <-  A.final.sens1 %>% filter (age >= 65 ) #TODO: <80
 incex(A.final.sens1)
@@ -909,10 +892,11 @@ incex(A.final.sens1)
 A.final.sens1  <-  A.final.sens1 %>% filter (pre.tx.months >= 12)
 incex(A.final.sens1)
 A.final.sens1  <-  A.final.sens1 %>% filter ((valid.pet.scan & tx=='sbrt') | tx=='sublobar')
-incex(A.final.sens1)
-A.final.sens1  <-  A.final.sens1 %>% filter (valid.death.indicator == 'valid' )
-incex(A.final.sens1)
 A.final.sens1  <-  A.final.sens1 %>% filter (microscopically_confirmed)
+incex(A.final.sens1)
+A.final.sens1  <-  A.final.sens1 %>% filter (valid.death.indicator)
+incex(A.final.sens1)
+
 sum(A.final.sens1$tx == 'sublobar' & A.final.sens1$tnm.n %in% c('1','2','3')) / sum(A.final.sens1$tx == 'sublobar')
 table( A.final.sens1$RX_SUMM_SYSTEMIC_SURG_SEQ, useNA="ifany")
 table( A.final$tx, useNA="ifany")
@@ -921,10 +905,9 @@ sum(A.final.sens1$tx == 'sublobar' & A.final.sens1$RX_SUMM_SCOPE_REG_LN_SUR_2003
 
 table( A.final$tx, useNA="ifany")
 
-A.final.sens1  %>%  write_rds( 'data/A.final33.sens1.RDS' )
+A.final.sens1  %>%  write_rds( 'data/A.final3.sens1.RDS' )
 
 
-with(A.final.sens1%>%, table( tnm.n, nna(death)))
 
 
 
