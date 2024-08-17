@@ -1,5 +1,5 @@
 # devtools::install('../pci2s_gcl/pci2s')
- devtools::load_all('../pci2s_gcl/pci2s')
+devtools::load_all('../pci2s')
  # library(pci2s)
 library(glmnet)
 library(arsenal)
@@ -15,7 +15,7 @@ library(arsenal)
 library(ggplot2)
 source('utilities.R')
 source('two.step.variable.selection.R')
-seed  <-  4
+seed  <-  3
 alpha  <- 1
 set.seed(seed)
 get.selected.columns  <-  function(fit, verbose=F) {
@@ -36,9 +36,24 @@ check.if.present  <- function(needles,haystack) sapply(needles, function(x) any(
 ################################
 # Load data 
 ################################
-subset.name <- 'all.gte.65'
+ subset.name <- 'sens1'
+ variable.selection  <- T
+ analysis.name  <-  sprintf('sens1.lasso.seed%d', seed)
 
-filename.in  <-  sprintf('data/A.final.%s.RDS', subset.name)
+ # subset.name <- 'sens1'
+ # variable.selection  <- F
+ # analysis.name  <-  sprintf('sens1.nolasso.seed%d', seed)
+
+
+# subset.name <- 'all.gte.65'
+# variable.selection  <- F
+# analysis.name  <-  sprintf('nolasso.seed%d', seed)
+
+# subset.name <- 'all.gte.65'
+# variable.selection  <- T
+# analysis.name  <-  sprintf('overall.seed%d', seed)
+
+filename.in  <-  sprintf('data/A.final3.%s.RDS', subset.name)
 A.final  <-  readRDS(filename.in)  %>% 
     mutate(treatment.year = year(tx.date),
             death.90.day = if_else ( ninety.day.mortality, death, as.Date(NA_character_)),
@@ -46,7 +61,13 @@ A.final  <-  readRDS(filename.in)  %>%
             death.other.cause = if_else ( other.cause.mortality == 'Death', death, as.Date(NA_character_)),
             death.other.cause.gt90day = if_else ( other.cause.mortality == 'Death' & tt > 90, death, as.Date(NA_character_)),
             pre.tx.days = pre.tx.months * 30.5,
-    ) %>% filter (tt > 0)
+    )
+
+table( A.final$tx, useNA="ifany")
+sum(A.final$tnm.n != 0 & A.final$tx == 'sublobar')/ sum(A.final$tx == 'sublobar')
+sum(A.final$tx == 'sublobar')
+# A.final %>% filter(tt == 0) %>% t 
+#%>% filter (tt > 0)
 A.final$tx  <-  droplevels(A.final$tx)
 
 # preprocessing
@@ -54,8 +75,6 @@ A.final <- A.final %>% mutate( race2 = ifelse (race == 'White' , 'White', 'Other
                               treatment.year2 = as.character(treatment.year),
                               treatment.year2 = (ifelse (treatment.year2 %in% c('2019', '2020'), '2019-2020', treatment.year2)),
                               histology2 = ifelse (grepl('Adeno', histology), 'Adenocarcinoma', 'Squamous cell'))
-variable.selection  <- T
-analysis.name  <-  sprintf('nb2020.lasso.seed%d', seed)
 
 # Define X
 X.factor  <-  c('sex', 'race',  'histology2', 'treatment.year2' ) 
@@ -95,12 +114,12 @@ cat(i+1,'other.cause.mortality\n')
 #################################
 ## Table 1 
 #################################
-# Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/Resources/app/quarto/bin/tools")
-# tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
-# f  <-  sprintf( 'tx ~ %s', paste( c(X.numeric, X.factor,'histology', gsub('_count_s', '_count_unbinned', Zs), gsub('_count', '_count_unbinned', c(Ws))), collapse = "+"))
-# labels(A.final)  <-  label_list
-# tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
-# summary(tt) %>% write2html(sprintf('/Users/george/Research_Local/SEER-Medicare/tbls/table1_2_%s.htm', analysis.name))
+ Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/Resources/app/quarto/bin/tools")
+ tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
+ f  <-  sprintf( 'tx ~ %s', paste( c(X.numeric, X.factor,'histology', gsub('_count_s', '_count_unbinned', Zs), gsub('_count', '_count_unbinned', c(Ws))), collapse = "+"))
+ labels(A.final)  <-  label_list
+ tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
+ summary(tt) %>% write2html(sprintf('/Users/george/Research_Local/SEER-Medicare/tbls/table1_2_%s.htm', analysis.name))
 
 A_ = (A.final$tx == 'sbrt')*1.0
 X_  <-  model.matrix(as.formula(sprintf('~ %s', paste(Xs, collapse = '+'))),  A.final)[,-1]
@@ -122,9 +141,10 @@ if (variable.selection) {
     # First, for W1
     ### Select with the Cox model
     A.temp  <-  A.final %>% mutate( 
-                                    W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date+1, units = "days" ), tt)/365,
+                                    W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date, units = "days" ), tt),
+                                    W1.time  = if_else (W1.time == 0, 0.5, W1.time)/365,
                                     W1.bool = ifelse( nna(!!rlang::sym(W1)), T, F),
-    )
+    ) 
     fit  <-  cv.glmnet(as.matrix(cbind(A_, X_, Z_)), Surv(A.temp$W1.time, A.temp$W1.bool), family = 'cox', alpha = 1, nfolds = nfolds)
     selected.columns  <- get.selected.columns(fit, verbose=T)
     Xw[[1]]  <-  as.matrix(cbind( A_, cbind(X_, Z_ )[,selected.columns]))
@@ -170,7 +190,8 @@ if (variable.selection) {
     for (outcome.i in 1:length(outcome.names)){ 
         outcome.name  <-  outcome.names[outcome.i]
         A.temp  <- A.temp %>% mutate(
-                                     Y.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+                                     Y.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt),
+                                     Y.time  = if_else (Y.time == 0, 0.5, Y.time)/365,
                                      Y.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
         )
         if (outcome.name =='death.other.cause.gt90day' ) {
@@ -245,10 +266,12 @@ hazard.differences.outcomes.adj  <-  make.odds.ratio.df ( outcome.names)
 hazard.differences.outcomes.proximal  <-  make.odds.ratio.df ( outcome.names) 
 for (outcome.i in 1:length(outcome.names)){ 
     outcome.name  <-  outcome.names[outcome.i]
+    print(outcome.name)
     A.temp  <-  A.final %>% mutate( 
-                                   outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/ 365+ runif(dim(A.final)[1] ,0,1)*1e-8,,
+                                   outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt),
                                    outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
-                                   ) %>% filter (tnm.n ==0)
+                                   outcome.time  = if_else (outcome.time == 0, 0.5, outcome.time)/ 365+ runif(dim(A.final)[1] ,0,1)*1e-8
+                                   ) 
     # Raw
     f  <- as.formula('Surv(outcome.time, outcome.bool) ~ const(tx)')
     m  <-  aalen( f ,  data = A.temp, robust = 0)
@@ -266,7 +289,8 @@ for (outcome.i in 1:length(outcome.names)){
                                           Xw = Xw,
                                           Y.count.bool =F, 
                                           verbose=T,
-                                          skip.W1 = outcome.name != 'death.cause.specific')
+                                          skip.W1 = outcome.name != 'death.cause.specific'
+    )
     est <- mout$ESTIMATE[1]
     se  <- mout$SE[1]
     hazard.differences.outcomes.proximal[outcome.i,1:3]  <-  c(est, est - 1.96*se, est + 1.96*se)
@@ -301,7 +325,7 @@ for (outcome.i in 1:length(Ws)){
                                           W.selected.Y  = selected.Ws[[outcome.name]],
                                           Xw = Xw,
                                           Y.count.bool =T, 
-                                          verbose=T)
+                                          verbose=F)
     est <- mout$ESTIMATE['A']
     se  <- mout$SE['A']
     odds.ratios.nocs.proximal[outcome.i,1:3]  <-  exp(c( est, est- 1.96*se, est + 1.96*se ))
@@ -312,12 +336,12 @@ for (outcome.i in 1:length(Ws)){
 }
 
 
-old.method  <-  readRDS('data/nb2020.hazard.differences.outcomes.proximal.rds')
-hazard.differences.outcomes.proximal[,'high_ci'] - hazard.differences.outcomes.proximal[,'low_ci']
-old.method[,'high_ci'] - old.method[,'low_ci']
-old.method  <-  readRDS('data/nb2020.odds.ratios.nocs.proximal.rds')
-odds.ratios.nocs.proximal[,'high_ci'] - odds.ratios.nocs.proximal[,'low_ci']
-old.method[,'high_ci'] - old.method[,'low_ci']
+# old.method  <-  readRDS('data/nb2020.hazard.differences.outcomes.proximal.rds')
+# hazard.differences.outcomes.proximal[,'high_ci'] - hazard.differences.outcomes.proximal[,'low_ci']
+# old.method[,'high_ci'] - old.method[,'low_ci']
+# old.method  <-  readRDS('data/nb2020.odds.ratios.nocs.proximal.rds')
+# odds.ratios.nocs.proximal[,'high_ci'] - odds.ratios.nocs.proximal[,'low_ci']
+# old.method[,'high_ci'] - old.method[,'low_ci']
 
 
 
@@ -326,11 +350,11 @@ A.final %>% count(tx)
 #################################
 ## Individual plots
 #################################
-saveRDS(hazard.differences.outcomes, sprintf('data/%s.hazard.differences.outcomes.rds', analysis.name))
+saveRDS(hazard.differences.outcomes, sprintf('data/%s.hazard.differences.outcomes.raw.rds', analysis.name))
 saveRDS(hazard.differences.outcomes.adj, sprintf('data/%s.hazard.differences.outcomes.adj.rds', analysis.name))
 fofo  <- readRDS(sprintf('data/%s.hazard.differences.outcomes.adj.rds', analysis.name))
 saveRDS(hazard.differences.outcomes.proximal, sprintf('data/%s.hazard.differences.outcomes.proximal.rds', analysis.name))
-saveRDS(odds.ratios.nocs, sprintf('data/%s.odds.ratios.nocs.rds', analysis.name))
+saveRDS(odds.ratios.nocs, sprintf('data/%s.odds.ratios.nocs.raw.rds', analysis.name))
 saveRDS(odds.ratios.nocs.adj, sprintf('data/%s.odds.ratios.nocs.adj.rds', analysis.name))
 saveRDS(odds.ratios.nocs.proximal, sprintf('data/%s.odds.ratios.nocs.proximal.rds', analysis.name))
 fifi  <- readRDS(sprintf('data/%s.hazard.differences.outcomes.proximal.rds', analysis.name))
@@ -362,8 +386,10 @@ ggsave(g3, width=6, height=2.65, filename = sprintf('figs/%s.proximal.pdf', anal
 
 
 
-
 toprint  <- hazard.differences.outcomes.adj
+for (i in 1:nrow(toprint)) {
+    cat( sprintf( '%s| %.3f (%.3f, %.3f)\n', label_list3[rownames(toprint)[i]], toprint[i,1], toprint[i,2], toprint[i,3]) ) }
+
 toprint  <- odds.ratios.nocs.proximal
 for (i in 1:nrow(toprint)) {
     cat( sprintf( '%s| %.2f (%.2f, %.2f)\n', label_list3[rownames(toprint)[i]], toprint[i,1], toprint[i,2], toprint[i,3]) ) }

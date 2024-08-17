@@ -1,6 +1,7 @@
-# devtools::install('../pci2s_gcl/pci2s')
+ # devtools::install('../pci2s_gcl/pci2s')
 # devtools::load_all('../pci2s_gcl/pci2s')
 library(pci2s)
+library(glmnet)
 library(dplyr)
 library(MASS)
 library(patchwork)
@@ -13,7 +14,6 @@ library(arsenal)
 library(ggplot2)
 source('utilities.R')
 set.seed(3)
-
 
 ################################
 # Load data 
@@ -29,7 +29,8 @@ A.final  <-  readRDS(filename.in)  %>%
             death.other.cause = if_else ( other.cause.mortality == 'Death', death, as.Date(NA_character_)),
             death.other.cause.gt90day = if_else ( other.cause.mortality == 'Death' & tt > 90, death, as.Date(NA_character_)),
             pre.tx.days = pre.tx.months * 30.5,
-    ) 
+    ) %>%
+filter (tt > 0)
 A.final$tx  <-  droplevels(A.final$tx)
 table( A.final$tx, useNA="ifany")
 
@@ -114,7 +115,61 @@ table( A.final$SEQUENCE_NUMBER, useNA="ifany")
 # Y.count.bool=T
 # A.final2 = A.final
 # noc.names.temp  <-  Ws
-two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, Xs, Y.count.bool = F, verbose = F, B=500, skip.W1 = F){
+# two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, Xs, Y.count.bool = F, verbose = F, B=500, skip.W1 = F){
+#     W1  <-  'death.other.cause.gt90day'
+#     A.temp  <-  A.final2 %>% mutate( 
+#                                     W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date, units = "days" ), tt)/365,
+#                                     W1.bool = ifelse( nna(!!rlang::sym(W1)), T, F),
+#                                     # W2 = rowSums( ( across( all_of(noc.names.temp)))),
+#     )
+#     A_ = (A.temp$tx == 'sbrt')*1.0
+#     X_  <-  model.matrix(as.formula(sprintf('~ %s', paste(Xs, collapse = '+'))),  A.temp)[,-1]
+#     W_ <- cbind( A.temp$W1.time, A.temp[,noc.names.temp])
+#     D2_  <- A.temp$W1.bool*1.0
+#     Z_  <- A.temp[,Zs]
+#     N_  <- dim(A.temp)[1]
+#     offset_  <- log(A.temp$time.offset)
+#         Xw = append( list(  as.matrix(cbind(  A_, X_, Z_ ))),
+#                 replicate (length(noc.names.temp),   list(as.matrix(cbind(1, A_, X_, Z_ )))))
+#     if (Y.count.bool) {
+#         A.temp  <- A.temp %>% mutate( Y.count  = !!rlang::sym(outcome.name),)
+#         Y_ = A.temp$Y.count
+#         out.model  <- pci.negbin(Y = Y_, offset= offset_,  A = A_, X = X_,
+#                               W = W_, Z = Z_, 
+#                               Xw = Xw,        
+#                               nco_type = c("ah", rep("negbin", length(noc.names.temp))),
+#                               nco_args = append( list(list(offset = rep(0, N_), event = D2_)),
+#                                                 replicate (length(noc.names.temp),  list(offset = offset_, init = NA), simplify=F)),
+#                               )
+#     }
+#     if(!Y.count.bool){
+#         A.temp  <- A.temp %>% mutate(
+#                                      Y.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+#                                      Y.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
+#         )
+#         Y_ = A.temp$Y.time
+#         D_ = A.temp$Y.bool*1.0
+#         if (skip.W1) {
+#             print('Not using other cause mortality in the W set')
+#             Xw =  replicate (length(noc.names.temp),   list(as.matrix(cbind(1, A_, X_, Z_ ))))
+#             W_ <- cbind(  A.temp[,noc.names.temp])
+#             out.model  <- pci.ah(Y = Y_, D = D_,  A = A_, X = X_,
+#                                   W = W_, Z = Z_, 
+#                                   Xw = Xw,        
+#                                   nco_type =  rep("negbin", length(noc.names.temp)),
+#                                   nco_args =  replicate (length(noc.names.temp),  list(offset = offset_, init = NA), simplify=F))
+#         }else {
+#             out.model  <- pci.ah(Y = Y_, D = D_,  A = A_, X = X_,
+#                                   W = W_, Z = Z_,
+#                                   Xw = Xw,        
+#                                   nco_type = c("ah", rep("negbin", length(noc.names.temp))),
+#                                   nco_args = append( list(list(offset = rep(0, N_), event = D2_)),
+#                                                     replicate (length(noc.names.temp),  list(offset = offset_, init = NA), simplify=F)))
+#         }
+#     }
+#     return(out.model)
+# }
+two.step.variable.selection  <-  function(A.final2, Zs,Xw,  outcome.name,noc.names.temp, Xs, Y.count.bool = F, verbose = F, B=500, skip.W1 = F){
     W1  <-  'death.other.cause.gt90day'
     A.temp  <-  A.final2 %>% mutate( 
                                     W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date, units = "days" ), tt)/365,
@@ -128,8 +183,6 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, Xs, Y.count.b
     Z_  <- A.temp[,Zs]
     N_  <- dim(A.temp)[1]
     offset_  <- log(A.temp$time.offset)
-        Xw = append( list(  as.matrix(cbind(  A_, X_, Z_ ))),
-                replicate (length(noc.names.temp),   list(as.matrix(cbind(1, A_, X_, Z_ )))))
     if (Y.count.bool) {
         A.temp  <- A.temp %>% mutate( Y.count  = !!rlang::sym(outcome.name),)
         Y_ = A.temp$Y.count
@@ -139,6 +192,7 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, Xs, Y.count.b
                               nco_type = c("ah", rep("negbin", length(noc.names.temp))),
                               nco_args = append( list(list(offset = rep(0, N_), event = D2_)),
                                                 replicate (length(noc.names.temp),  list(offset = offset_, init = NA), simplify=F)),
+                                 lasso_select_stage2=T
                               )
     }
     if(!Y.count.bool){
@@ -149,8 +203,7 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, Xs, Y.count.b
         Y_ = A.temp$Y.time
         D_ = A.temp$Y.bool*1.0
         if (skip.W1) {
-            print('Not using other cause mortality in the W set')
-            Xw =  replicate (length(noc.names.temp),   list(as.matrix(cbind(1, A_, X_, Z_ ))))
+            print('CHECK: Not using other cause mortality in the W set??')
             W_ <- cbind(  A.temp[,noc.names.temp])
             out.model  <- pci.ah(Y = Y_, D = D_,  A = A_, X = X_,
                                   W = W_, Z = Z_, 
@@ -161,6 +214,7 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, Xs, Y.count.b
             out.model  <- pci.ah(Y = Y_, D = D_,  A = A_, X = X_,
                                   W = W_, Z = Z_,
                                   Xw = Xw,        
+                                  lasso_select_stage2 = T,
                                   nco_type = c("ah", rep("negbin", length(noc.names.temp))),
                                   nco_args = append( list(list(offset = rep(0, N_), event = D2_)),
                                                     replicate (length(noc.names.temp),  list(offset = offset_, init = NA), simplify=F)))
@@ -171,10 +225,80 @@ two.step  <-  function(A.final2, Zs,  outcome.name,noc.names.temp, Xs, Y.count.b
 
 
 ################################
+# Variable selection. 
+################################
+
+
+# First, identify the variables to include in each stage 1 model
+
+A_ = (A.final$tx == 'sbrt')*1.0
+X_  <-  model.matrix(as.formula(sprintf('~ %s', paste(Xs, collapse = '+'))),  A.final)[,-1]
+Z_  <- A.final[,Zs]
+nfolds  <- 5
+
+# Time to event outcome is W1. We use a Cox model, as there is no published L1 penalized additive hazards model
+W1  <-  'death.other.cause.gt90day'
+Xw =  replicate (length(Ws)+1,   list())
+names(Xw)  <- c(W1, Ws)
+A.temp  <-  A.final %>% mutate( 
+                                W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date+1, units = "days" ), tt)/365,
+                                W1.bool = ifelse( nna(!!rlang::sym(W1)), T, F),
+)
+fit  <-  cv.glmnet(as.matrix(cbind(A_, X_, Z_)), Surv(A.temp$W1.time, A.temp$W1.bool), family = 'cox', alpha = 1, nfolds = nfolds)
+coefs  <-  coef(fit, s = 'lambda.min')[,1] != 0
+selected.columns  <- names(coefs)[c(-1,-2)][coefs[c(-1,-2)]]
+Xw[[1]]  <-  as.matrix(cbind( A_, cbind(X_, Z_ )[,selected.columns]))
+print(sprintf('%s: excluded %s', W1, paste(names(coefs)[c(-1,-2)][!coefs[c(-1,-2)]], collapse = ', ')))
+# For each of the count outcomes, fit a lasso using a poisson GLM and build the corresponding Xw
+for (i in 1:length(Ws)) {
+    W_i  <- A.final[,Ws[i]]
+    # use a glmnet to regress W_i onto A, X, Zin a lasso
+    fit  <-  cv.glmnet(as.matrix(cbind(A_, X_, Z_)), as.matrix(W_i), offset= log(A.final$time.offset), family = 'poisson', alpha = 1, nfolds = nfolds)
+    # get the coefficients corresponding to the lambda.min
+    coefs  <-  coef(fit, s = 'lambda.min')[,1] != 0 
+    selected.columns  <- names(coefs)[c(-1,-2)][coefs[c(-1,-2)]]
+    Xw[[Ws[i]]]  <-  as.matrix(cbind(1, A_,cbind( X_, Z_ )[,selected.columns]))
+    # print the excluded columns
+    print(sprintf('%s: excluded %s', Ws[i], paste(names(coefs)[-1][!coefs[-1]], collapse = ', '))) 
+ }
+
+
+# stage1_models =  replicate (length(Ws)+1,   list())
+# W_model[[j]] <- lin_ah(time = Wj, event = event_j, covariates = Xwj, offset = offset_j)
+
+
+# # Next, identify which of the count Ws to include for each of the count outcomes
+# for (outcome.i in 1:length(Ws)){ 
+#     W1  <-  'death.other.cause.gt90day'
+#     outcome.name  <-  Ws[outcome.i]
+#     noc.names.temp  <- setdiff( Ws, c(outcome.name))
+#     A.temp  <-  A.final %>% mutate( 
+#                                     W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date, units = "days" ), tt)/365,
+#                                     W1.bool = ifelse( nna(!!rlang::sym(W1)), T, F),
+#     )
+#     A_ = (A.temp$tx == 'sbrt')*1.0
+#     X_  <-  model.matrix(as.formula(sprintf('~ %s', paste(Xs, collapse = '+'))),  A.temp)[,-1]
+#     W_ <- cbind( A.temp$W1.time, A.temp[,noc.names.temp])
+#     D2_  <- A.temp$W1.bool*1.0
+#     Z_  <- A.temp[,Zs]
+#     N_  <- dim(A.temp)[1]
+#     offset_  <- log(A.temp$time.offset)
+#         Xw = append( list(  as.matrix(cbind(  A_, X_, Z_ ))),
+#                 replicate (length(noc.names.temp),   list(as.matrix(cbind(1, A_, X_, Z_ )))))
+#     A.temp  <- A.temp %>% mutate( Y.count  = !!rlang::sym(outcome.name),)
+#     Y_ = A.temp$Y.count
+#     # use a poisson model to regress Y onto A, X, Z, and the selected Ws
+#     out.model  <- cv.glmnet(as.matrix(cbind( A_),Ws[[outcome.i]]), as.matrix(Y_), offset= offset_, family = 'poisson', alpha = 1, nfolds = nfolds)
+                
+# }
+
+
+################################
 #  Counts
 ################################
 # options(warn=2)
 # options(error = recover)
+devtools::load_all('../pci2s_gcl/pci2s')
 odds.ratios.nocs  <-  make.odds.ratio.df ( Ws) 
 odds.ratios.nocs.adj  <-  make.odds.ratio.df ( Ws) 
 odds.ratios.nocs.proximal  <-  make.odds.ratio.df ( Ws) 
@@ -194,9 +318,9 @@ for (outcome.i in 1:length(Ws)){
     est  <-  nb_fit.out$ESTIMATE[3]
     se  <- nb_fit.out$SE[3]
     odds.ratios.nocs.adj[outcome.i,1:3]  <-  exp(c( est, est-1.96*se, est+1.96*se))
-    # Proximal
+# Proximal
     noc.names.temp  <- setdiff( Ws, c(outcome.name))
-    mout  <-  two.step(A.final, Zs,  outcome.name, noc.names.temp, Xs,Y.count.bool =T, verbose=F)
+    mout  <-  two.step.variable.selection(A.final, Zs,Xw,  outcome.name, noc.names.temp, Xs,Y.count.bool =T, verbose=T)
     est <- mout$ESTIMATE['A']
     se  <- mout$SE['A']
     odds.ratios.nocs.proximal[outcome.i,1:3]  <-  exp(c( est, est- 1.96*se, est + 1.96*se ))
