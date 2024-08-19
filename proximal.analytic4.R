@@ -1,9 +1,10 @@
-# devtools::install('../pci2s_gcl/pci2s')
-devtools::load_all('../pci2s')
+ devtools::load_all('../pci2s_gcl/pci2s')
+# devtools::load_all('../pci2s')
  # library(pci2s)
 library(glmnet)
 library(arsenal)
 library(dplyr)
+library(tidyr)
 library(MASS)
 library(patchwork)
 library(lubridate)
@@ -15,6 +16,7 @@ library(arsenal)
 library(ggplot2)
 source('utilities.R')
 source('two.step.variable.selection.R')
+ source('baseline.hazard.R')
 seed  <-  3
 alpha  <- 1
 set.seed(seed)
@@ -264,6 +266,8 @@ if (variable.selection) {
 hazard.differences.outcomes  <-  make.odds.ratio.df ( outcome.names) 
 hazard.differences.outcomes.adj  <-  make.odds.ratio.df ( outcome.names) 
 hazard.differences.outcomes.proximal  <-  make.odds.ratio.df ( outcome.names) 
+mouts  <-  list()
+# for (outcome.i in 2:2){ 
 for (outcome.i in 1:length(outcome.names)){ 
     outcome.name  <-  outcome.names[outcome.i]
     print(outcome.name)
@@ -291,11 +295,42 @@ for (outcome.i in 1:length(outcome.names)){
                                           verbose=T,
                                           skip.W1 = outcome.name != 'death.cause.specific'
     )
+    mouts[[outcome.name]]  <-  mout
     est <- mout$ESTIMATE[1]
     se  <- mout$SE[1]
     hazard.differences.outcomes.proximal[outcome.i,1:3]  <-  c(est, est - 1.96*se, est + 1.96*se)
     print(hazard.differences.outcomes.proximal[outcome.i,1:3])
 } 
+
+# Plot cumulative hazards
+mout  <- mouts[['death.cause.specific']]
+largs  <-  mout$lin_ah.args
+idx  <- largs$covariates[,1] ==0
+cum.hazard.out.A0  <-  baseline.cum.hazard(time =largs$t1[idx], event = largs$d1[idx], covariates = largs$covariates[idx,], ESTIMATE = mout$ESTIMATE)
+idx  <- largs$covariates[,1] ==1
+cum.hazard.out.A1  <-  baseline.cum.hazard(time =largs$t1[idx], event = largs$d1[idx], covariates = largs$covariates[idx,], ESTIMATE = mout$ESTIMATE)
+cum.hazard.toplot  <-as.data.frame(rbind(cbind(cumhaz = cum.hazard.out.A0$cumhaz, 
+                                                   cum.unadj.haz = cum.hazard.out.A0$cum.unadj.haz,
+                                                   t_=cum.hazard.out.A0$t_, A=0),
+                               cbind(cumhaz = cum.hazard.out.A1$cumhaz, 
+                                     cum.unadj.haz = cum.hazard.out.A1$cum.unadj.haz,
+                                        t_=cum.hazard.out.A1$t_, A=1) ))
+
+toplot  <-  as.data.frame(cum.hazard.toplot) %>% 
+    mutate(tx = as.factor(ifelse( A == 0, 'sublobar', 'sbrt')))
+g1  <-  ggplot(toplot, aes(x = t_, y = cum.unadj.haz, color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1))  + ggtitle('Unadjusted') + theme_bw() + labs (x = 'Time (years)', y = 'Cumulative hazard')
+g2  <- ggplot(toplot, aes(x = t_, y = cumhaz, color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ggtitle('Proximal') + theme_bw()+ labs (x = 'Time (years)', y = 'Cumulative hazard')
+g  <-  g1 + g2 + plot_layout(guides = "collect", axis_titles = "collect") & theme(legend.position = "bottom") 
+ggsave(g, width=8, height=4, filename = sprintf('figs/%s.cumhaz.pdf', analysis.name))
+
+g1  <-  ggplot(toplot, aes(x = t_, y = exp(-1*cum.unadj.haz), color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1))  + ggtitle('Unadjusted') + theme_bw() + labs (x = 'Time (years)', y = 'Cumulative hazard')
+g2  <- ggplot(toplot, aes(x = t_, y = exp(-1*cumhaz), color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ggtitle('Proximal') + theme_bw()+ labs (x = 'Time (years)', y = 'Survival')
+g  <-  g1 + g2 + plot_layout(guides = "collect", axis_titles = "collect") & theme(legend.position = "bottom") 
+ggsave(g, width=8, height=4, filename = sprintf('figs/%s.surv.pdf', analysis.name))
+
+
+
+
 
 # Counts
 odds.ratios.nocs  <-  make.odds.ratio.df ( Ws) 
