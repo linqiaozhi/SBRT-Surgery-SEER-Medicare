@@ -1,6 +1,7 @@
  devtools::load_all('../pci2s_gcl/pci2s')
 # devtools::load_all('../pci2s')
  # library(pci2s)
+ library(ahaz)
 library(glmnet)
 library(arsenal)
 library(dplyr)
@@ -20,8 +21,11 @@ source('two.step.variable.selection.R')
 seed  <-  3
 alpha  <- 1
 set.seed(seed)
-get.selected.columns  <-  function(fit, verbose=F) {
+get.selected.columns  <-  function(fit, cn=NULL, verbose=F) {
     coefs  <-  coef(fit, s = 'lambda.min')[,1] != 0
+    if (!is.null(cn)) {
+        names(coefs)  <-  cn
+    }
     selected.columns  <- names(coefs)[c(-1,-2)][coefs[c(-1,-2)]]
     if (verbose ==T) print(sprintf('Excluded %s', paste(names(coefs)[c(-1,-2)][!coefs[c(-1,-2)]], collapse = ', ')))
     return(selected.columns)
@@ -38,9 +42,9 @@ check.if.present  <- function(needles,haystack) sapply(needles, function(x) any(
 ################################
 # Load data 
 ################################
- subset.name <- 'sens1'
- variable.selection  <- T
- analysis.name  <-  sprintf('sens1.lasso.seed%d', seed)
+ # subset.name <- 'sens1'
+ # variable.selection  <- T
+ # analysis.name  <-  sprintf('sens1.lasso.seed%d', seed)
 
  # subset.name <- 'sens1'
  # variable.selection  <- F
@@ -51,9 +55,9 @@ check.if.present  <- function(needles,haystack) sapply(needles, function(x) any(
 # variable.selection  <- F
 # analysis.name  <-  sprintf('nolasso.seed%d', seed)
 
-# subset.name <- 'all.gte.65'
-# variable.selection  <- T
-# analysis.name  <-  sprintf('overall.seed%d', seed)
+ subset.name <- 'all.gte.65'
+ variable.selection  <- T
+ analysis.name  <-  sprintf('overall.ahaz.seed%d', seed)
 
 filename.in  <-  sprintf('data/A.final3.%s.RDS', subset.name)
 A.final  <-  readRDS(filename.in)  %>% 
@@ -144,11 +148,16 @@ if (variable.selection) {
     ### Select with the Cox model
     A.temp  <-  A.final %>% mutate( 
                                     W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date, units = "days" ), tt),
-                                    W1.time  = if_else (W1.time == 0, 0.5, W1.time)/365,
+                                    W1.time  = if_else (W1.time == 0, 0.5, W1.time)/365+runif(dim(A.final)[1] ,0,1)*1e-8,
                                     W1.bool = ifelse( nna(!!rlang::sym(W1)), T, F),
     ) 
-    fit  <-  cv.glmnet(as.matrix(cbind(A_, X_, Z_)), Surv(A.temp$W1.time, A.temp$W1.bool), family = 'cox', alpha = 1, nfolds = nfolds)
-    selected.columns  <- get.selected.columns(fit, verbose=T)
+    
+    design.mat  <-  as.matrix(cbind(A_, X_, Z_))
+    fit  <-  tune.ahazpen( Surv(A.temp$W1.time, A.temp$W1.bool), design.mat )
+    selected.columns  <- get.selected.columns(fit, colnames(design.mat), verbose=T)
+    # fit.cox  <-  cv.glmnet(as.matrix(cbind(A_, X_, Z_)), Surv(A.temp$W1.time, A.temp$W1.bool), family = 'cox', alpha = 1, nfolds = nfolds)
+    # selected.columns.cox  <- get.selected.columns(fit.cox, verbose=T)
+    # cbind(coef(fit, 'lambda.min'), coef(fit.cox, 'lambda.min') )
     Xw[[1]]  <-  as.matrix(cbind( A_, cbind(X_, Z_ )[,selected.columns]))
     ## Refit model without penalization
     W_hat[,W1]  <-  lin_ah( time = A.temp$W1.time, 
@@ -193,7 +202,7 @@ if (variable.selection) {
         outcome.name  <-  outcome.names[outcome.i]
         A.temp  <- A.temp %>% mutate(
                                      Y.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt),
-                                     Y.time  = if_else (Y.time == 0, 0.5, Y.time)/365,
+                                     Y.time  = if_else (Y.time == 0, 0.5, Y.time)/365 +runif(dim(A.temp)[1] ,0,1)*1e-8,
                                      Y.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
         )
         if (outcome.name =='death.other.cause.gt90day' ) {
@@ -201,15 +210,16 @@ if (variable.selection) {
         }else{
             W.hat.temp  <- W_hat[,c('death.other.cause.gt90day', noc.names.temp)]
         }
-        fit  <-  cv.glmnet(as.matrix(cbind(A_, X_, W.hat.temp)), 
-                           Surv(A.temp$Y.time, A.temp$Y.bool), 
-                           family = 'cox', 
-                           alpha = 1, 
-                           nfolds = nfolds)
-        coefs  <-  coef(fit, s = 'lambda.min')[,1] != 0
-        selected.columns  <- names(coefs)[c(-1,-2)][coefs[c(-1,-2)]]
+        design.mat  <-  as.matrix(cbind(A_, X_, W.hat.temp))
+        fit  <-  tune.ahazpen( 
+                            Surv(A.temp$Y.time, A.temp$Y.bool)  ,
+                              design.mat )
+        print(outcome.name)
+        selected.columns  <- get.selected.columns(fit, colnames(design.mat), verbose=T)
         selected.Ws[[outcome.name]] <-  Ws[check.if.present(Ws,selected.columns)]
         selected.Xs[[outcome.name]] <-  Xs[check.if.present(Xs,selected.columns)]
+        # coefs  <- coef(fit, s = 'lambda.min')
+        # rownames(coefs) <- colnames(design.mat)
     }
     # Print out the variables selected at each stage
     sink(sprintf('data/variable.selection.seed%f.alpha%f.nfolds%f.txt', seed,alpha, nfolds))
