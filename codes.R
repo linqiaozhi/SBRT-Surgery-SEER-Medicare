@@ -74,7 +74,12 @@ expand.each.code  <-  function(code.list, icd9or10 = 'undefined') {
 }
 
 
-valid.dxs  <- c( expand_range('1622','1629'), expand_range(as.icd10('C34'), as.icd10('C349')))
+#TODO: Add in nodule here for the SBRT patients...
+valid.dxs  <- c( expand_range('1622','1629'), 
+                expand_range('7931', '79319'),
+                expand_range(as.icd10('C34'), as.icd10('C349')),
+                expand_range(as.icd10('R91'), as.icd10('R918')))
+
 sbrt.icds  <-  c('9230', '9231', '9232', '9233', '9239',
                  'DB22DZ', 'DB22HZZ', 'DB22JZZ')
 sublobar.icds  <-  c(  '3230', '3239', '3220', '3229',  # ICD9 codes for sublobar
