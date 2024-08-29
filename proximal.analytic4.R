@@ -1,7 +1,5 @@
- devtools::load_all('../pci2s_gcl/pci2s')
-# devtools::load_all('../pci2s')
- # library(pci2s)
- library(ahaz)
+library(pci2s)
+library(ahaz)
 library(glmnet)
 library(arsenal)
 library(dplyr)
@@ -17,45 +15,8 @@ library(arsenal)
 library(ggplot2)
 source('utilities.R')
 source('two.step.variable.selection.R')
- source('baseline.hazard.R')
+# source('baseline.hazard.R')
 alpha  <- 1
-
-
-################################
-# Load data 
-################################
- # subset.name <- 'sens1'
- # variable.selection  <- T
- # analysis.name  <-  sprintf('sens1.lasso.seed%d', seed)
-
- # subset.name <- 'sens1'
- # variable.selection  <- F
- # analysis.name  <-  sprintf('sens1.nolasso.seed%d', seed)
-
-
-# subset.name <- 'all.gte.65'
-# variable.selection  <- F
-# analysis.name  <-  sprintf('nolasso.seed%d', seed)
-
-# subset.name <- 'all.gte.65'
-# variable.selection  <- T
-# analysis.name  <-  sprintf('overall.ahaz.seed%d', seed)
-
-subset.name <- 'all.gte.65'
-variable.selection  <- 'automatic'
-lambda.s  <- 'lambda.min'
-analysis.name  <-  'lambda.min'
-
-subset.name <- 'all.gte.65'
-variable.selection  <- 'automatic'
-lambda.s  <- 'lambda.min.lowest'
-analysis.name  <-  'lambda.min.lowest'
-
-subset.name <- 'all.gte.65'
-variable.selection  <- 'automatic'
-lambda.s  <- 'lambda.min.lower'
-analysis.name  <-  'lambda.min.lower'
-
 
 
 variable.selection  <- 'automatic'
@@ -73,7 +34,9 @@ for (subset.name in subset.names ){
         print(analysis.name)
         print('====================')
 
-
+        ################################
+        # Load data 
+        ################################
         filename.in  <-  sprintf('data/A.final5.%s.RDS', subset.name)
         A.final  <-  readRDS(filename.in)  %>% 
             mutate(treatment.year = year(tx.date),
@@ -84,11 +47,7 @@ for (subset.name in subset.names ){
                    pre.tx.days = pre.tx.months * 30.5,
             )
 
-        table( A.final$tx, useNA="ifany")
-        sum(A.final$tnm.n != 0 & A.final$tx == 'sublobar')/ sum(A.final$tx == 'sublobar')
-        sum(A.final$tx == 'sublobar')
-        # A.final %>% filter(tt == 0) %>% t 
-        #%>% filter (tt > 0)
+        print(sprintf('%.3f%% of the sublobar patients are N+', 100*sum(A.final$tnm.n != 0 & A.final$tx == 'sublobar')/ sum(A.final$tx == 'sublobar')))
         A.final$tx  <-  droplevels(A.final$tx)
 
         # preprocessing
@@ -111,27 +70,20 @@ for (subset.name in subset.names ){
 
         outcome.names  <-  c( 'death', 'death.cause.specific', 'death.90.day',  'death.other.cause.gt90day')
 
-        # use cut and quantile to create group the vector
-        A.final <- A.final %>% mutate( time.offset = pre.tx.months)
-
-        A.final  <- A.final %>% mutate( 
+        A.final  <- A.final %>% mutate( time.offset = pre.tx.months, 
                                        across( all_of(c(Z.count.unscaled, Ws)), function(x) (x >0), .names = "{.col}_unbinned" ),
-                                       across( all_of(c(Z.count.unscaled)), function(x) quartile(x/time.offset), .names = "{.col}_s" )
-        )
-        A.final  <- A.final %>% mutate( 
-                                       across( all_of(c(X.numeric)), scale_, .names = "{.col}_z" )
-        )
+                                       across( all_of(c(Z.count.unscaled)), function(x) quartile(x/time.offset), .names = "{.col}_s" ),
+                                       across( all_of(c(X.numeric)), scale_, .names = "{.col}_z" ))
 
-
-        print('X')
-        for (i in 1:length(Xs)) cat(i, Xs[i], '\n')
-        print('Z')
-        for (i in 1:length(Zs)) cat(i, Zs[i], '\n')
-        print('W')
-        for (i in 1:length(Ws)) cat(i, Ws[i], '\n')
-        cat(i+1,'other.cause.mortality\n')
-
-
+        if (F) {
+            print('X')
+            for (i in 1:length(Xs)) cat(i, Xs[i], '\n')
+            print('Z')
+            for (i in 1:length(Zs)) cat(i, Zs[i], '\n')
+            print('W')
+            for (i in 1:length(Ws)) cat(i, Ws[i], '\n')
+            cat(i+1,'other.cause.mortality\n')
+        }
         #################################
         ## Table 1 
         #################################
@@ -140,13 +92,14 @@ for (subset.name in subset.names ){
         f  <-  sprintf( 'tx ~ %s', paste( c(X.numeric, X.factor,'histology', gsub('_count_s', '_count_unbinned', Zs), gsub('_count', '_count_unbinned', c(Ws))), collapse = "+"))
         labels(A.final)  <-  label_list
         tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
-        summary(tt) %>% write2html(sprintf('/Users/george/Research_Local/SEER-Medicare/tbls/table1_2_%s.htm', analysis.name))
+        summary(tt) %>% write2html(sprintf('/Users/george/Research_Local/SEER-Medicare/tbls/table1_2_%s.htm', analysis.name), quiet=T)
 
         A_ = (A.final$tx == 'sbrt')*1.0
         X_  <-  model.matrix(as.formula(sprintf('~ %s', paste(Xs, collapse = '+'))),  A.final)[,-1]
         Z_  <- A.final[,Zs]
         W1  <-  'death.other.cause.gt90day'
         if (variable.selection == 'automatic') {
+            print('Automatic variable selection: stage 1 models')
             ################################
             # Variable selection: Stage 1. For each W,  first fit a lasso to determine
             # which X and Z will be included, which will make up the Xw matrix. Then, refit
@@ -172,13 +125,8 @@ for (subset.name in subset.names ){
             pdf(sprintf('figs/%s.%s.lasso.pdf', analysis.name, W1))
             plot(fit)
             dev.off()
-            print(W1)
-            selected.columns  <- get.selected.columns.ahaz(fit, s = lambda.s, colnames(design.mat), verbose=T, min.vars = 10)
-            # fit.cox  <-  cv.glmnet(as.matrix(cbind(A_, X_, Z_)), Surv(A.temp$W1.time, A.temp$W1.bool), family = 'cox', alpha = 1, nfolds = nfolds)
-            # fit.cox  <-  cv.glmnet(as.matrix(cbind(A_, X_, Z_[,'DIAB_UC_pre_month_count_s'])), Surv(A.temp$W1.time, A.temp$W1.bool), family = 'cox', alpha = 0.5, nfolds = nfolds)
-            # fit.cox  <-  cv.glmnet(as.matrix(cbind(A_, X_, Z_)), Surv(A.temp$W1.time, A.temp$W1.bool), family = 'cox', alpha = 1, nfolds = nfolds)
-            # selected.columns.cox  <- get.selected.columns(fit.cox, verbose=T)
-            # cbind(coef(fit, 'lambda.min'), coef(fit.cox, 'lambda.min') )
+            # print(W1)
+            selected.columns  <- get.selected.columns.ahaz(fit, s = lambda.s, colnames(design.mat), verbose=F, min.vars = 10)
             Xw[[1]]  <-  as.matrix(cbind( A_, cbind(X_, Z_ )[,selected.columns]))
             ## Refit model without penalization
             W_hat[,W1]  <-  lin_ah( time = A.temp$W1.time, 
@@ -190,14 +138,13 @@ for (subset.name in subset.names ){
             for (i in 1:length(Ws)) {
                 ## Select with a poisson L1 model
                 W_i  <- A.final[,Ws[i]]
-                print(Ws[i])
+                # print(Ws[i])
                 # use a glmnet to regress W_i onto A, X, Zin a lasso
                 fit  <-  cv.glmnet(as.matrix(cbind(A_, X_, Z_)), as.matrix(W_i), offset= log(A.final$time.offset), family = 'poisson', alpha = 1, nfolds = nfolds)
                 pdf(sprintf('figs/%s.%s.lasso.pdf', analysis.name, Ws[i]))
                 plot(fit)
                 dev.off()
-                # readline(prompt="Press [enter] to continue")
-                selected.columns  <- get.selected.columns(fit,s=lambda.s,  verbose=T, min.vars = 10)
+                selected.columns  <- get.selected.columns(fit,s=lambda.s,  verbose=F, min.vars = 10)
                 Xw[[Ws[i]]]  <-  as.matrix(cbind(1, A_,cbind( X_, Z_ )[,selected.columns]))
                 ## Refit model without penalization
                 W_hat[,Ws[i]]  <- negbin_fit(y = as.matrix(W_i), 
@@ -209,25 +156,25 @@ for (subset.name in subset.names ){
             # Variable selection: Stage 2. For each outcome, fit a lasso to determine which
             # of the Ws and Xs to include.
             ################################
+            print('Automatic variable selection: stage 2 models')
             # Next, find the variables to include in each stage 2 model. 
             # Next, for the count Ys
             selected.Ws  <- list()
             selected.Xs  <- list()
             for (outcome.i in 1:length(Ws)){ 
                 outcome.name  <-  Ws[outcome.i]
-                print(outcome.name)
+                # print(outcome.name)
                 A.temp  <-  A.final %>% mutate( outcome.count  = !!rlang::sym(outcome.name))
                 noc.names.temp  <- setdiff( Ws, c(outcome.name))
-                #TODO: Should the time offset be in years?
                 fit  <-  cv.glmnet(cbind (A_, X_, W_hat[,c('death.other.cause.gt90day', noc.names.temp)] ), as.matrix(A.temp$outcome.count), offset= log(A.temp$time.offset), family = 'poisson', alpha = 1, nfolds = nfolds)
-                selected.columns  <- get.selected.columns(fit, s=lambda.s, verbose=T, min.vars = 5)
+                selected.columns  <- get.selected.columns(fit, s=lambda.s, verbose=F, min.vars = 5)
                 selected.Ws[[outcome.name]] <-  Ws[check.if.present(Ws,selected.columns)]
                 selected.Xs[[outcome.name]] <-  Xs[check.if.present(Xs,selected.columns)]
             }
 
             for (outcome.i in 1:length(outcome.names)){ 
                 outcome.name  <-  outcome.names[outcome.i]
-                print(outcome.name)
+                # print(outcome.name)
                 A.temp  <- A.temp %>% mutate(
                                              Y.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt),
                                              Y.time  = if_else (Y.time == 0, 0.5, Y.time)/365 +runif(dim(A.temp)[1] ,0,1)*1e-8,
@@ -242,52 +189,13 @@ for (subset.name in subset.names ){
                 fit  <-  tune.ahazpen( 
                                       Surv(A.temp$Y.time, A.temp$Y.bool)  ,
                                       design.mat )
-                print(outcome.name)
-                selected.columns  <- get.selected.columns.ahaz(fit, s=lambda.s, colnames(design.mat), verbose=T, min.vars = 2)
+                # print(outcome.name)
+                selected.columns  <- get.selected.columns.ahaz(fit, s=lambda.s, colnames(design.mat), verbose=F, min.vars = 2)
                 selected.Ws[[outcome.name]] <-  Ws[check.if.present(Ws,selected.columns)]
                 selected.Xs[[outcome.name]] <-  Xs[check.if.present(Xs,selected.columns)]
-                # coefs  <- coef(fit, s = 'lambda.min')
-                # rownames(coefs) <- colnames(design.mat)
             }
-        }else if (variable.selection == 'manual') {
-            library(stringi)
-            AXZ  <-  c(colnames(cbind(  A_, X_, Z_ )))
-            ki  <- function(x) unlist(sapply(x, function(i) AXZ[which(stri_detect_fixed(AXZ,i))]))
-
-            # stage1.selected  <- list(
-            #                          "fall_pre_month_count"                 = ki( c('A_', 'age_z', 'sex', 'race', 'treatment.year', 'walking', 'hospital', 'wheelchairs','transportation', 'other_supplies','diabetic_footwear', 'dementia', 'nervous_system')),
-            #                          'other_injury_pre_month_count'         = ki( c('A_', 'age_z', 'sex', 'race', 'treatment.year', 'walking', 'hospital', 'wheelchairs','transportation', 'other_supplies','diabetic_footwear', 'dementia', 'nervous_system')),
-            #                          'diverticular_disease_pre_month_count' = ki( c('A_', 'age_z', 'sex', 'race', 'treatment.year' )),
-            #                          'hernia_pre_month_count' = ki( c('A_', 'age_z', 'sex', 'race', 'treatment.year' )),
-            #                          'arthropathy_pre_month_count' = ki( c('A_', 'age_z', 'sex', 'race', 'treatment.year', 'walking', 'hospital', 'wheelchairs','transportation', 'other_supplies')),
-            #                          'GU_sx_pre_month_count' = ki( c('A_', 'age_z', 'sex', 'race', 'treatment.year' ))
-            # )
-
-            Xw = append( list(  as.matrix(cbind(  A_, X_, Z_ ))), replicate (length(Ws),   list(as.matrix(cbind(1, A_, X_, Z_ )))))
-            names(Xw)  <- c(W1, Ws)
-            # W1 will use everything except size and histology
-            Xw[[W1]]  <-  Xw[[W1]][, setdiff(colnames(Xw[[W1]]), c('size_z', 'histology2'))]
-            colnames(Xw[[W1]])
-            for (outcome.i in 1:length(Ws)){ 
-                Xw[[Ws[outcome.i]]]  <-  Xw[[Ws[outcome.i]]][,c("1", stage1.selected[[Ws[outcome.i]]])]
-            }
-            unrelated.to.tumor  <- c('age_z', 'sex', 'race', 'treatment.year2')
-            selected.Xs  <- list()
-            selected.Ws  <- list()
-            for (outcome.i in 1:length(Ws)){ 
-                selected.Ws[[Ws[outcome.i]]]  <-   setdiff( Ws, c(Ws[outcome.i]))
-                selected.Xs[[Ws[outcome.i]]]  <-   unrelated.to.tumor
-            }
-
-            for (outcome.i in 1:length(outcome.names)){ 
-                selected.Ws[[outcome.names[outcome.i]]]  <-  Ws
-            }
-            selected.Xs[['death']]  <- Xs
-            selected.Xs[['death.90.day']]  <- Xs
-            selected.Xs[['death.cause.specific']]  <- Xs
-            selected.Xs[['death.other.cause.gt90day']]  <- unrelated.to.tumor
-
         }else {
+            print('Manual variable selection')
             Xw = append( list(  as.matrix(cbind(  A_, X_, Z_ ))), replicate (length(Ws),   list(as.matrix(cbind(1, A_, X_, Z_ )))))
             names(Xw)  <- c(W1, Ws)
             selected.Xs  <- list()
@@ -301,8 +209,6 @@ for (subset.name in subset.names ){
                 selected.Xs[[outcome.names[outcome.i]]]  <-  Xs
             }
         }
-
-
 
         # Print out the variables selected at each stage
         sink(sprintf('data/variable.selection.%s.txt', analysis.name))
@@ -342,15 +248,13 @@ for (subset.name in subset.names ){
         ################################
         # Obtain estimates using the selected variables 
         ################################
-
-
+        print('Estimate the hazard differences for time-to-event outcomes')
 
         # Time-to-event outcomes 
         hazard.differences.outcomes  <-  make.odds.ratio.df ( outcome.names) 
         hazard.differences.outcomes.adj  <-  make.odds.ratio.df ( outcome.names) 
         hazard.differences.outcomes.proximal  <-  make.odds.ratio.df ( outcome.names) 
         mouts  <-  list()
-        # for (outcome.i in 2:2){ 
         for (outcome.i in 1:length(outcome.names)){ 
             outcome.name  <-  outcome.names[outcome.i]
             print(outcome.name)
@@ -385,144 +289,8 @@ for (subset.name in subset.names ){
             print(hazard.differences.outcomes.proximal[outcome.i,1:3])
         } 
 
-        ## Plot cumulative hazards
-        #mout  <- mouts[['death.cause.specific']]
-        #largs  <-  mout$lin_ah.args
-        #idx  <- largs$covariates[,1] ==0
 
-
-        #pick.mode  <- function(x, string) {
-        #    x_  <- x
-        #    x.vars <- grep(string, names(x))
-        #    max.var  <- which.max(x[x.vars])
-        #    x_[x.vars]  <- 0
-        #    x_[x.vars[max.var]]  <- 1
-        #    return(x_)
-        #}
-
-        ##option 1
-        #eval.at  <- 0
-        #eval.at[1] <- 0
-        #cum.hazard.out.A0  <-  baseline.cum.hazard(time =largs$t1, event = largs$d1, covariates = largs$covariates, ESTIMATE = mout$ESTIMATE, eval.at = eval.at)
-        #eval.at[1] <- 1
-        #cum.hazard.out.A1  <-  baseline.cum.hazard(time =largs$t1, event = largs$d1, covariates = largs$covariates, ESTIMATE = mout$ESTIMATE, eval.at = eval.at)
-        #cum.hazard.toplot  <-as.data.frame(rbind(cbind(cumhaz = cum.hazard.out.A0$cumhaz, 
-        #                                       cum.unadj.haz = cum.hazard.out.A0$cum.unadj.haz, t_=cum.hazard.out.A0$t_, A=0), 
-        #                                         cbind(cumhaz = cum.hazard.out.A1$cumhaz, 
-        #                                     cum.unadj.haz = cum.hazard.out.A1$cum.unadj.haz,
-        #                                        t_=cum.hazard.out.A1$t_, A=1) ))
-        #toplot  <-  as.data.frame(cum.hazard.toplot) %>% 
-        #    mutate(tx = as.factor(ifelse( A == 0, 'sublobar', 'sbrt')))
-        #g1  <-  ggplot(toplot, aes(x = t_, y = cumhaz, color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1))  + theme_bw() + labs (x = 'Time (years)', y = 'Cumulative hazard')
-        #g2  <- ggplot(toplot, aes(x = t_, y = exp(-1*cumhaz), color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + theme_bw()+ labs (x = 'Time (years)', y = 'S(t)')
-        #g  <-  g1 + g2 + plot_layout(guides = "collect", axis_titles = "collect") & theme(legend.position = "bottom") 
-        #ggsave(g, width=8, height=4, filename = sprintf('figs/%s.cumhaz.option1.pdf', analysis.name))
-
-
-        ##option 1
-        #eval.at  <- colMeans(largs$covariates)
-        #eval.at <- pick.mode(eval.at, 'treatment.year')
-        #eval.at <- pick.mode(eval.at, 'race')
-        #print(eval.at)
-        #eval.at[1] <- 0
-        #cum.hazard.out.A0  <-  baseline.cum.hazard(time =largs$t1, event = largs$d1, covariates = largs$covariates, ESTIMATE = mout$ESTIMATE, eval.at = eval.at)
-        #eval.at[1] <- 1
-        #cum.hazard.out.A1  <-  baseline.cum.hazard(time =largs$t1, event = largs$d1, covariates = largs$covariates, ESTIMATE = mout$ESTIMATE, eval.at = eval.at)
-        #cum.hazard.toplot  <-as.data.frame(rbind(cbind(cumhaz = cum.hazard.out.A0$cumhaz, 
-        #                                       cum.unadj.haz = cum.hazard.out.A0$cum.unadj.haz, t_=cum.hazard.out.A0$t_, A=0), 
-        #                                         cbind(cumhaz = cum.hazard.out.A1$cumhaz, 
-        #                                     cum.unadj.haz = cum.hazard.out.A1$cum.unadj.haz,
-        #                                        t_=cum.hazard.out.A1$t_, A=1) ))
-        #toplot  <-  as.data.frame(cum.hazard.toplot) %>% 
-        #    mutate(tx = as.factor(ifelse( A == 0, 'sublobar', 'sbrt')))
-        #g1  <-  ggplot(toplot, aes(x = t_, y = cumhaz, color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1))  + theme_bw() + labs (x = 'Time (years)', y = 'Cumulative hazard')
-        #g2  <- ggplot(toplot, aes(x = t_, y = exp(-1*cumhaz), color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + theme_bw()+ labs (x = 'Time (years)', y = 'S(t)')
-        #g  <-  g1 + g2 + plot_layout(guides = "collect", axis_titles = "collect") & theme(legend.position = "bottom") 
-        #ggsave(g, width=8, height=4, filename = sprintf('figs/%s.cumhaz.option2.pdf', analysis.name))
-
-
-
-
-
-        ## eval.at  <- colMeans(largs$covariates)
-        ## eval.at <- pick.mode(eval.at, 'treatment.year')
-        ## eval.at <- pick.mode(eval.at, 'race')
-        ## print(eval.at)
-        ## # Option 2
-        ## source('lin_ah_eval.R')
-        ## idx  <- largs$covariates[,1] ==0
-        ## cum.hazard.out.A0  <- lin_ah_eval( time =largs$t1[idx], 
-        ##                          event = largs$d1[idx], 
-        ##                          covariates = largs$covariates[idx,-1],
-        ##                     eval.at =eval.at[-1])
-        ## idx  <- largs$covariates[,1] ==1
-        ## cum.hazard.out.A1  <- lin_ah_eval( time =largs$t1[idx], 
-        ##                          event = largs$d1[idx], 
-        ##                          covariates = largs$covariates[idx,-1],
-        ##                     eval.at =eval.at[-1])
-        ## cum.hazard.toplot  <-as.data.frame(rbind(cbind(cumhaz = cum.hazard.out.A0$cumhaz, 
-        ##                            t_=cum.hazard.out.A0$t_, A=0),
-        ##                            cbind(cumhaz = cum.hazard.out.A1$cumhaz, 
-        ##                             t_=cum.hazard.out.A1$t_, A=1) ))
-        ## toplot  <-  as.data.frame(cum.hazard.toplot) %>% mutate(tx = as.factor(ifelse( A == 0, 'sublobar', 'sbrt')))
-        ## g1  <-  ggplot(toplot, aes(x = t_, y = cumhaz, color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1))  + theme_bw() + labs (x = 'Time (years)', y = 'Cumulative hazard')
-        ## g2  <- ggplot(toplot, aes(x = t_, y = exp(-1*cumhaz), color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + theme_bw()+ labs (x = 'Time (years)', y = 'S(t)')
-        ## g  <-  g1 + g2 + plot_layout(guides = "collect", axis_titles = "collect") & theme(legend.position = "bottom") 
-        ## ggsave(g, width=8, height=4, filename = sprintf('figs/%s.cumhaz.option2.pdf', analysis.name))
-        ## g
-
-
-        ## Option 3
-
-        #eval.at %*% mout$ESTIMATE 
-        #str(mout$ESTIMATE )
-        #source('baseline.hazard.R')
-        #idx  <- largs$covariates[,1] ==0
-        #eval.at  <- 0
-        #eval.at[1] <- 0
-        #cum.hazard.out.A0  <-  baseline.cum.hazard(time =largs$t1[idx], event = largs$d1[idx], covariates = largs$covariates[idx,], ESTIMATE = mout$ESTIMATE, eval.at = eval.at)
-        #idx  <- largs$covariates[,1] ==1
-        #eval.at[1] <- 1
-        #cum.hazard.out.A1  <-  baseline.cum.hazard(time =largs$t1[idx], event = largs$d1[idx], covariates = largs$covariates[idx,], ESTIMATE = mout$ESTIMATE, eval.at = eval.at)
-
-        ## idx  <- largs$covariates[,1] ==0
-        ## cum.hazard.out.A0  <-  baseline.cum.hazard(time =largs$t1[idx], event = largs$d1[idx], covariates = largs$covariates[idx,], ESTIMATE = mout$ESTIMATE, eval.at = NULL)
-        ## idx  <- largs$covariates[,1] ==1
-        ## cum.hazard.out.A1  <-  baseline.cum.hazard(time =largs$t1[idx], event = largs$d1[idx], covariates = largs$covariates[idx,], ESTIMATE = mout$ESTIMATE, eval.at = NULL)
-
-        #cum.hazard.toplot  <-as.data.frame(rbind(cbind(cumhaz = cum.hazard.out.A0$cumhaz, 
-        #                                                   cum.unadj.haz = cum.hazard.out.A0$cum.unadj.haz,
-        #                                                   t_=cum.hazard.out.A0$t_, A=0),
-        #                               cbind(cumhaz = cum.hazard.out.A1$cumhaz, 
-        #                                     cum.unadj.haz = cum.hazard.out.A1$cum.unadj.haz,
-        #                                        t_=cum.hazard.out.A1$t_, A=1) ))
-        #toplot  <-  as.data.frame(cum.hazard.toplot) %>% 
-        #    mutate(tx = as.factor(ifelse( A == 0, 'sublobar', 'sbrt')))
-        #g1  <-  ggplot(toplot, aes(x = t_, y = cumhaz, color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1))  + theme_bw() + labs (x = 'Time (years)', y = 'Cumulative hazard')
-        #g2  <- ggplot(toplot, aes(x = t_, y = exp(-1*cumhaz), color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + theme_bw()+ labs (x = 'Time (years)', y = 'S(t)')
-        #g  <-  g1 + g2 + plot_layout(guides = "collect", axis_titles = "collect") & theme(legend.position = "bottom") 
-        #ggsave(g, width=8, height=4, filename = sprintf('figs/%s.cumhaz.option3.pdf', analysis.name))
-
-
-
-
-
-        #g1  <-  ggplot(toplot, aes(x = t_, y = cum.unadj.haz, color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1))  + ggtitle('Unadjusted') + theme_bw() + labs (x = 'Time (years)', y = 'Cumulative hazard')
-        #g2  <- ggplot(toplot, aes(x = t_, y = cumhaz, color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ggtitle('Proximal') + theme_bw()+ labs (x = 'Time (years)', y = 'Cumulative hazard')
-        #g  <-  g1 + g2 + plot_layout(guides = "collect", axis_titles = "collect") & theme(legend.position = "bottom") 
-        #ggsave(g, width=8, height=4, filename = sprintf('figs/%s.cumhaz.option3.pdf', analysis.name))
-
-
-
-        #g1  <-  ggplot(toplot, aes(x = t_, y = exp(-1*cum.unadj.haz), color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1))  + ggtitle('Unadjusted') + theme_bw() + labs (x = 'Time (years)', y = 'Cumulative hazard')
-        #g2  <- ggplot(toplot, aes(x = t_, y = exp(-1*cumhaz), color = tx)) + geom_line() +  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ggtitle('Proximal') + theme_bw()+ labs (x = 'Time (years)', y = 'Survival')
-        #g  <-  g1 + g2 + plot_layout(guides = "collect", axis_titles = "collect") & theme(legend.position = "bottom") 
-        #ggsave(g, width=8, height=4, filename = sprintf('figs/%s.surv.pdf', analysis.name))
-
-
-
-
-
+        print('Estimate the risk ratios for count outcomes')
         # Counts
         odds.ratios.nocs  <-  make.odds.ratio.df ( Ws) 
         odds.ratios.nocs.adj  <-  make.odds.ratio.df ( Ws) 
@@ -555,71 +323,62 @@ for (subset.name in subset.names ){
             est <- mout$ESTIMATE['A']
             se  <- mout$SE['A']
             odds.ratios.nocs.proximal[outcome.i,1:3]  <-  exp(c( est, est- 1.96*se, est + 1.96*se ))
-            print(odds.ratios.nocs[outcome.i,1:3])
-            print(odds.ratios.nocs.adj[outcome.i,1:3])
-            print(odds.ratios.nocs.proximal[outcome.i,1:3])
+            # print(odds.ratios.nocs[outcome.i,1:3])
+            # print(odds.ratios.nocs.adj[outcome.i,1:3])
+            # print(odds.ratios.nocs.proximal[outcome.i,1:3])
             cat('==========\n\n\n')
         }
 
 
-        # old.method  <-  readRDS('data/nb2020.hazard.differences.outcomes.proximal.rds')
-        # hazard.differences.outcomes.proximal[,'high_ci'] - hazard.differences.outcomes.proximal[,'low_ci']
-        # old.method[,'high_ci'] - old.method[,'low_ci']
-        # old.method  <-  readRDS('data/nb2020.odds.ratios.nocs.proximal.rds')
-        # odds.ratios.nocs.proximal[,'high_ci'] - odds.ratios.nocs.proximal[,'low_ci']
-        # old.method[,'high_ci'] - old.method[,'low_ci']
-
-
-
-        ## table( A.temp$arthropathy_pre_count, useNA="ifany")
-        A.final %>% count(tx)
         #################################
         ## Individual plots
         #################################
         saveRDS(hazard.differences.outcomes, sprintf('data/%s.hazard.differences.outcomes.raw.rds', analysis.name))
         saveRDS(hazard.differences.outcomes.adj, sprintf('data/%s.hazard.differences.outcomes.adj.rds', analysis.name))
-        fofo  <- readRDS(sprintf('data/%s.hazard.differences.outcomes.adj.rds', analysis.name))
         saveRDS(hazard.differences.outcomes.proximal, sprintf('data/%s.hazard.differences.outcomes.proximal.rds', analysis.name))
         saveRDS(odds.ratios.nocs, sprintf('data/%s.odds.ratios.nocs.raw.rds', analysis.name))
         saveRDS(odds.ratios.nocs.adj, sprintf('data/%s.odds.ratios.nocs.adj.rds', analysis.name))
         saveRDS(odds.ratios.nocs.proximal, sprintf('data/%s.odds.ratios.nocs.proximal.rds', analysis.name))
-        fifi  <- readRDS(sprintf('data/%s.hazard.differences.outcomes.proximal.rds', analysis.name))
 
-        height  <-  2
-        Y.toplot  <-  c('death', 'death.90.day', 'death.other.cause.gt90day', 'death.cause.specific')
-        hazard.differences.outcomes.toplot  <-  hazard.differences.outcomes[Y.toplot,]
-        hazard.differences.outcomes.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.toplot)
-        label_list3  <-  label_list2
-        names(label_list3)  <- gsub( '_unbinned', '', names(label_list3))
-        g1.a  <-  make.HD.plot(hazard.differences.outcomes.toplot, label_list3) 
-        g1.b  <-  make.OR.plot(odds.ratios.nocs, label_list3)
-        g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) + plot_annotation(title="Raw (Unadjusted)")
-        hazard.differences.outcomes.adj.toplot  <-  hazard.differences.outcomes.adj[Y.toplot,]
-        hazard.differences.outcomes.adj.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.adj.toplot)
-        g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj.toplot, label_list3)
-        g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list3)
-        g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))+ plot_annotation(title="Adjusted")
-        hazard.differences.outcomes.proximal.toplot  <-  hazard.differences.outcomes.proximal[c('death.cause.specific'),]
-        hazard.differences.outcomes.proximal.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.proximal.toplot)
-        g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal.toplot, label_list3)
-        g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list3)
-        g3  <-  g3.a / g3.b + plot_layout(heights = (c(0.25,height)))+ plot_annotation(title="Proximal")
-        G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2)))) / (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) / (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
-        # ggsave(G, height=8.5, width=5, filename = sprintf('figs/%s.pdf', analysis.name))
-        ggsave(g1, width=6, height=2.65, filename = sprintf('figs/%s.raw.pdf', analysis.name))
-        ggsave(g2, width=6, height=2.65, filename = sprintf('figs/%s.adj.pdf', analysis.name))
-        ggsave(g3, width=6, height=2.65, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
-
+        # height  <-  2
+        # Y.toplot  <-  c('death', 'death.90.day', 'death.other.cause.gt90day', 'death.cause.specific')
+        # hazard.differences.outcomes.toplot  <-  hazard.differences.outcomes[Y.toplot,]
+        # hazard.differences.outcomes.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.toplot)
+        # label_list3  <-  label_list2
+        # names(label_list3)  <- gsub( '_unbinned', '', names(label_list3))
+        # g1.a  <-  make.HD.plot(hazard.differences.outcomes.toplot, label_list3) 
+        # g1.b  <-  make.OR.plot(odds.ratios.nocs, label_list3)
+        # g1  <-  g1.a / g1.b+ plot_layout(heights = (c(1,height))) + plot_annotation(title="Raw (Unadjusted)")
+        # hazard.differences.outcomes.adj.toplot  <-  hazard.differences.outcomes.adj[Y.toplot,]
+        # hazard.differences.outcomes.adj.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.adj.toplot)
+        # g2.a  <-  make.HD.plot(hazard.differences.outcomes.adj.toplot, label_list3)
+        # g2.b  <-  make.OR.plot(odds.ratios.nocs.adj, label_list3)
+        # g2  <-  g2.a / g2.b+ plot_layout(heights = (c(1,height)))+ plot_annotation(title="Adjusted")
+        # hazard.differences.outcomes.proximal.toplot  <-  hazard.differences.outcomes.proximal[c('death.cause.specific'),]
+        # hazard.differences.outcomes.proximal.toplot$y_axis  <-  1:nrow(hazard.differences.outcomes.proximal.toplot)
+        # g3.a  <-  make.HD.plot(hazard.differences.outcomes.proximal.toplot, label_list3)
+        # g3.b  <-  make.OR.plot(odds.ratios.nocs.proximal, label_list3)
+        # g3  <-  g3.a / g3.b + plot_layout(heights = (c(0.25,height)))+ plot_annotation(title="Proximal")
+        # G  <-  (g1.a/g1.b+ plot_layout(heights = (c(1,2)))) / (g2.a / g2.b+ plot_layout(heights = (c(1,2)))) / (g3.a / g3.b+ plot_layout(heights = (c(1,2))))  
+        # # ggsave(G, height=8.5, width=5, filename = sprintf('figs/%s.pdf', analysis.name))
+        # ggsave(g1, width=6, height=2.65, filename = sprintf('figs/%s.raw.pdf', analysis.name))
+        # ggsave(g2, width=6, height=2.65, filename = sprintf('figs/%s.adj.pdf', analysis.name))
+        # ggsave(g3, width=6, height=2.65, filename = sprintf('figs/%s.proximal.pdf', analysis.name))
 
 
-        toprint  <- hazard.differences.outcomes.adj
-        for (i in 1:nrow(toprint)) {
-            cat( sprintf( '%s| %.3f (%.3f, %.3f)\n', label_list3[rownames(toprint)[i]], toprint[i,1], toprint[i,2], toprint[i,3]) ) }
-
-        toprint  <- odds.ratios.nocs.proximal
-        for (i in 1:nrow(toprint)) {
-            cat( sprintf( '%s| %.2f (%.2f, %.2f)\n', label_list3[rownames(toprint)[i]], toprint[i,1], toprint[i,2], toprint[i,3]) ) }
-
+        # sink('data/summary.txt', append = T)
+        # cat(sprintf('\n%s, %s at %s\n', analysis.name, Sys.Date(), Sys.time()))
+        # toprint  <- hazard.differences.outcomes.proximal
+        # for (i in 1:nrow(toprint)) {
+        #     cat( sprintf( '%s| %.3f (%.3f, %.3f)\n', label_list3[rownames(toprint)[i]], toprint[i,1], toprint[i,2], toprint[i,3]) ) 
+        # }
+        # toprint  <- odds.ratios.nocs.proximal
+        # for (i in 1:nrow(toprint)) {
+        #     cat( sprintf( '%s| %.3f (%.3f, %.3f)\n', label_list3[rownames(toprint)[i]], toprint[i,1], toprint[i,2], toprint[i,3]) ) 
+        # }
+        # print('====================')
+        # sink()
 
     }
 }
+

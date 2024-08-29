@@ -141,9 +141,9 @@ get.dates.of.dx  <-  function( A, proc.codes ) {
 }
 
 
-make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
-    xlims <- c(0.3, 3)
-    tt  <-  ifelse (hazard, 'Hazard Ratio (log scale)', 'Hazard Ratio (log scale)')
+make.OR.plot  <-  function (odds.ratios_, label_list2, number.of.spaces = 50) {
+    xlims <- c(0.5, 2)
+    tt  <- sprintf("Risk Ratio\n  \U2190 favors SBRT %s favors Surgery \U2192", strrep(' ', number.of.spaces))
     # row.names(odds.ratios_) <- gsub("_pre_month_count", "", row.names(odds.ratios_))
      row.names(odds.ratios_) <- gsub("_..._count", "",  row.names(odds.ratios_))
     g <- ggplot(odds.ratios_, aes(x = estimate, y=y_axis)) + 
@@ -155,7 +155,7 @@ make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
         #scale_y_continuous(breaks = 1:max(odds.ratio$y_axis), labels = unlist(label_list[rownames(odds.ratios__propensity)]), trans='reverse') +
         scale_y_continuous(breaks = 1:max(odds.ratios_$y_axis), labels = label_list2[row.names(odds.ratios_)], trans='reverse') +
         #scale_x_continuous(breaks = seq(0,1.4,0.2), limits = xlims ) +
-        scale_x_continuous(limits = xlims ) +
+        scale_x_continuous(limits = xlims,breaks=c(0.5,0.75,1, 1.5,2) ) +
         coord_trans(x = "log10") +
         xlab(tt) +
         ylab("") +
@@ -165,8 +165,7 @@ make.OR.plot  <-  function (odds.ratios_, label_list2, hazard =F) {
               panel.grid.major.y = element_line( size=.05, color="grey", linetype = 'dashed' ),
         legend.position = 'bottom',
       #  legend.title = element_blank(),
-        legend.key.size=grid::unit(2,"lines"),
-         axis.text.y = ggtext::element_markdown()) 
+        legend.key.size=grid::unit(2,"lines")) 
  g
 }
 
@@ -220,17 +219,17 @@ get.selected.columns.ahaz  <-  function(fit, s='lambda.min', cn=NULL, verbose=F,
     } else {
         last.idx  <-  max(which( diff(fit$fit$df) !=0))
         if (last.idx < lambda.min.idx) {
-            warning('All variables selected')
+            if (verbose) print('All variables selected')
         }
         min.to.end.third  <- floor((last.idx - lambda.min.idx )/3)
         if (s == 'lambda.min.lower' ) {
             lambda.idx  <- lambda.min.idx + min.to.end.third
             coefs_  <-  fit$fit$beta[,lambda.idx]
-            print(sprintf('Lambda min is %f (%d), selecting lambda %f (%d)', fit$lambda[lambda.min.idx], fit$fit$df[lambda.min.idx], fit$lambda[lambda.idx], fit$fit$df[lambda.idx]))
+            if (verbose) print(sprintf('Lambda min is %f (%d), selecting lambda %f (%d)', fit$lambda[lambda.min.idx], fit$fit$df[lambda.min.idx], fit$lambda[lambda.idx], fit$fit$df[lambda.idx]))
         }else if (s == 'lambda.min.lowest' ) {
             lambda.idx  <- lambda.min.idx + 2*min.to.end.third
             coefs_  <-  fit$fit$beta[,lambda.idx]
-            print(sprintf('Lambda min is %f (%d), selecting lambda %f (%d)', fit$lambda[lambda.min.idx], fit$fit$df[lambda.min.idx], fit$lambda[lambda.idx], fit$fit$df[lambda.idx]))
+            if (verbose) print(sprintf('Lambda min is %f (%d), selecting lambda %f (%d)', fit$lambda[lambda.min.idx], fit$fit$df[lambda.min.idx], fit$lambda[lambda.idx], fit$fit$df[lambda.idx]))
         }else if (s== 'lambda.1se') {
             candidates  <-  which(fit$tunem < min(fit$tunem)+ sd(fit$tunem)/ fit$foldsused[[1]]$nfolds)
             lambda.se1.idx  <-  candidates[which.min(fit$tunem[candidates])]
@@ -255,18 +254,18 @@ get.selected.columns  <-  function(fit, s='lambda.min', cn=NULL, verbose=F, min.
     min.to.end.third  <- floor((last.idx - lambda.min.idx )/3)
     if (s == 'lambda.min.lower' ) {
         lambda.idx  <- lambda.min.idx + min.to.end.third
-        print(sprintf('Lambda min is %f (%d), selecting lambda %f (%d)', fit$lambda[lambda.min.idx], fit$fit$df[lambda.min.idx], fit$lambda[lambda.idx], fit$fit$df[lambda.idx]))
+        if (verbose) print(sprintf('Lambda min is %f (%d), selecting lambda %f (%d)', fit$lambda[lambda.min.idx], fit$fit$df[lambda.min.idx], fit$lambda[lambda.idx], fit$fit$df[lambda.idx]))
     }else if (s == 'lambda.min.lowest' ) {
         lambda.idx  <- lambda.min.idx + 2*min.to.end.third
-        print(sprintf('Lambda min is %f (%d), selecting lambda %f (%d)', fit$lambda[lambda.min.idx], fit$glmnet.fit$df[lambda.min.idx], fit$lambda[lambda.idx], fit$glmnet.fit$df[lambda.idx]))
+        if (verbose) print(sprintf('Lambda min is %f (%d), selecting lambda %f (%d)', fit$lambda[lambda.min.idx], fit$glmnet.fit$df[lambda.min.idx], fit$lambda[lambda.idx], fit$glmnet.fit$df[lambda.idx]))
     }else if (s %in% c('lambda.min', 'lambda.1se')) {
         lambda.idx  <-  which(fit$lambda == fit[s])
         idx_2  <-  lambda.idx
         if (min.vars > fit$nzero[idx_2]) {
-            print('Too few variables selected. Increasing lambda')
+            if (verbose) print('Too few variables selected. Increasing lambda')
             idx_2  <-  idx_2 + 1
             while (fit$nzero[idx_2] < min.vars) idx_2  <-  idx_2 + 1
-            print(sprintf('Decreased lambda to %f', fit$lambda[idx_2]))
+            if (verbose) print(sprintf('Decreased lambda to %f', fit$lambda[idx_2]))
         }
     }
     if (!is.null(cn)) {
