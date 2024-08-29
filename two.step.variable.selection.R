@@ -16,7 +16,12 @@ two.step.variable.selection  <-  function(data.mat,
                                     W1.time  = if_else (W1.time == 0, 0.5, W1.time)/365,
                                     W1.bool = ifelse( nna(!!rlang::sym(W1)), T, F),
     )
-    X_  <-  model.matrix(as.formula(sprintf('~ %s', paste(X.selected.Y, collapse = '+'))),  A.temp)[,-1]
+    if (length(X.selected.Y) == 0 ) {
+        X_  <- NULL
+        warning('No X are selected')
+    }else{
+  X_  <-  model.matrix(as.formula(sprintf('~ %s', paste(X.selected.Y, collapse = '+'))),  A.temp)[,-1]
+    }
     A_ = (A.temp$tx == 'sbrt')*1.0
     D2_  <- A.temp$W1.bool*1.0
     N_  <- dim(A.temp)[1]

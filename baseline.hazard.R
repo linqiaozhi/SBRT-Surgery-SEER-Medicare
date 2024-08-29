@@ -28,7 +28,7 @@
 #' ah_result <- lin_ah(time = t_censored, event = event, covariates = x)
 #' ah_result$summary
 #' @export
-baseline.cum.hazard <- function(time, event, covariates, ESTIMATE, weights = NULL,
+baseline.cum.hazard <- function(time, event, covariates, ESTIMATE, eval.at = NULL, weights = NULL,
                                offset = rep(0, length(time)), variance = TRUE) {
   t <- as.numeric(time)
   d <- as.numeric(event)
@@ -67,10 +67,13 @@ baseline.cum.hazard <- function(time, event, covariates, ESTIMATE, weights = NUL
     haz <- 1:ntime * NA
 
     for (k in 1:ntime) {
-      haz[k] <- sum(d1 * (o1 == k) - (eta1 + x1 %*% ESTIMATE) * (o1 >= k) * dtime[k]) /
+      haz[k] <- sum(d1 * (o1 == k)/dtime[k] - (eta1 + x1 %*% ESTIMATE) * (o1 >= k)) /
         sum(o1 >= k)
     }
-    cumhaz <- cumsum(haz)
+    if (!is.null(eval.at)) {
+        haz  <- haz + c(eval.at%*% ESTIMATE)
+    }
+    cumhaz <- cumsum(haz*dtime)
 
 
     unadj.haz <- 1:ntime * NA
@@ -82,12 +85,4 @@ baseline.cum.hazard <- function(time, event, covariates, ESTIMATE, weights = NUL
     return(list(cumhaz = cumhaz,
                 cum.unadj.haz = cum.unadj.haz,
                 t_=t2))
-    
 }
-
-
-
-
-
-
-

@@ -212,6 +212,78 @@ explain_icd9_10  <-  function (dx) {
 nna  <-  function ( x) !is.na(x)
 scale_  <-  function(x) (x - mean(x, na.rm = T))/sd(x, na.rm = T)
 
+get.selected.columns.ahaz  <-  function(fit, s='lambda.min', cn=NULL, verbose=F, min.vars = 1) {
+    lambda.min.idx  <-  which.min(fit$tunem)
+    # Get the index of the smallest lambda which drops variables
+    if (s == 'lambda.min') {
+        coefs_  <-  fit$fit$beta[,lambda.min.idx]
+    } else {
+        last.idx  <-  max(which( diff(fit$fit$df) !=0))
+        if (last.idx < lambda.min.idx) {
+            warning('All variables selected')
+        }
+        min.to.end.third  <- floor((last.idx - lambda.min.idx )/3)
+        if (s == 'lambda.min.lower' ) {
+            lambda.idx  <- lambda.min.idx + min.to.end.third
+            coefs_  <-  fit$fit$beta[,lambda.idx]
+            print(sprintf('Lambda min is %f (%d), selecting lambda %f (%d)', fit$lambda[lambda.min.idx], fit$fit$df[lambda.min.idx], fit$lambda[lambda.idx], fit$fit$df[lambda.idx]))
+        }else if (s == 'lambda.min.lowest' ) {
+            lambda.idx  <- lambda.min.idx + 2*min.to.end.third
+            coefs_  <-  fit$fit$beta[,lambda.idx]
+            print(sprintf('Lambda min is %f (%d), selecting lambda %f (%d)', fit$lambda[lambda.min.idx], fit$fit$df[lambda.min.idx], fit$lambda[lambda.idx], fit$fit$df[lambda.idx]))
+        }else if (s== 'lambda.1se') {
+            candidates  <-  which(fit$tunem < min(fit$tunem)+ sd(fit$tunem)/ fit$foldsused[[1]]$nfolds)
+            lambda.se1.idx  <-  candidates[which.min(fit$tunem[candidates])]
+            lambda.se1  <-  fit$lambda[lambda.se1.idx]
+            coefs_  <-  fit$fit$beta[,lambda.se1.idx]
+            if (length(coefs_) < min.vars) {
+                stop('Too few variables selected')
+            }
+        }
+    }
+    coefs  <-  coefs_ != 0
+    if (!is.null(cn)) {
+        names(coefs)  <-  cn
+    }
+    selected.columns  <- names(coefs)[c(-1,-2)][coefs[c(-1,-2)]]
+    if (verbose ==T) print(sprintf('Excluded %s', paste(names(coefs)[c(-1,-2)][!coefs[c(-1,-2)]], collapse = ', ')))
+    return(selected.columns)
+}
+get.selected.columns  <-  function(fit, s='lambda.min', cn=NULL, verbose=F, min.vars = 1) {
+    lambda.min.idx  <-  which(fit$lambda == fit['lambda.min'])
+    last.idx  <-  max(which( diff(fit$glmnet.fit$df) !=0))
+    min.to.end.third  <- floor((last.idx - lambda.min.idx )/3)
+    if (s == 'lambda.min.lower' ) {
+        lambda.idx  <- lambda.min.idx + min.to.end.third
+        print(sprintf('Lambda min is %f (%d), selecting lambda %f (%d)', fit$lambda[lambda.min.idx], fit$fit$df[lambda.min.idx], fit$lambda[lambda.idx], fit$fit$df[lambda.idx]))
+    }else if (s == 'lambda.min.lowest' ) {
+        lambda.idx  <- lambda.min.idx + 2*min.to.end.third
+        print(sprintf('Lambda min is %f (%d), selecting lambda %f (%d)', fit$lambda[lambda.min.idx], fit$glmnet.fit$df[lambda.min.idx], fit$lambda[lambda.idx], fit$glmnet.fit$df[lambda.idx]))
+    }else if (s %in% c('lambda.min', 'lambda.1se')) {
+        lambda.idx  <-  which(fit$lambda == fit[s])
+        idx_2  <-  lambda.idx
+        if (min.vars > fit$nzero[idx_2]) {
+            print('Too few variables selected. Increasing lambda')
+            idx_2  <-  idx_2 + 1
+            while (fit$nzero[idx_2] < min.vars) idx_2  <-  idx_2 + 1
+            print(sprintf('Decreased lambda to %f', fit$lambda[idx_2]))
+        }
+    }
+    if (!is.null(cn)) {
+        names(coefs)  <-  cn
+    }
+    coefs  <-  coef(fit, s = fit$lambda[lambda.idx])[,1] != 0
+    selected.columns  <- names(coefs)[c(-1,-2)][coefs[c(-1,-2)]]
+    if (verbose ==T) print(sprintf('Excluded %s', paste(names(coefs)[c(-1,-2)][!coefs[c(-1,-2)]], collapse = ', ')))
+    return(selected.columns)
+}
+quartile  <- function(x) {
+    scaled  <-  as.numeric(x)
+    breaks  <- c(0,quantile(scaled[scaled!=0], probs = c(0, 0.25, 0.5, 0.75), na.rm = T, names=F), max(scaled, na.rm = T))
+    scaled  <-  cut(x, breaks, include.lowest = T, labels = c('0', '1', '2', '3', '4'), right=F) %>% as.character %>% as.numeric
+    return(scaled)
+}
+check.if.present  <- function(needles,haystack) sapply(needles, function(x) any(grepl(sprintf('^%s',x), haystack)))
 
 ################################
 # Backup 
