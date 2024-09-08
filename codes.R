@@ -80,8 +80,20 @@ valid.dxs  <- c( expand_range('1622','1629'),
                 expand_range(as.icd10('C34'), as.icd10('C349')),
                 expand_range(as.icd10('R91'), as.icd10('R918')))
 
-sbrt.icds  <-  c('9230', '9231', '9232', '9233', '9239',
-                 'DB22DZ', 'DB22HZZ', 'DB22JZZ')
+sbrt.icds  <-  c('9230', '9231', '9232', '9233', '9239', 'DB22DZ', 'DB22HZZ', 'DB22JZZ')
+sbrt.cpts  <-  c('77373', 'G0173', 'G0251', 'G0339', 'G0340', '61793',  '0082T' , '77435')
+
+ebus.cpts  <- c('31620', '31652', '31653', '31654')
+# https://www.bostonscientific.com/content/dam/bostonscientific/Reimbursement/Pulmonary/pdf/EBUS_Coding_and_Payment_Quick_Reference.pdf
+# There do not seem to be any ICD codes corresponding specifically to ebus procedure
+ebus.icds  <- c()
+#Biopsy or cytology via bronch. Not including bronch without  tissue.
+bronch.bx.cpts  <- c( '31625', '31628', '31629', '31632', '31633', '31622', '31623', '31624')
+bronch.bx.icds  <- c('3201',  '3324', '3327', '0BB28ZX', '0BB38ZX', '0BB48ZX', '0BB58ZX', '0BB68ZX', '0BB78ZX', '0BB88ZX', '0BB98ZX', '0BBB8ZX', '0BD38ZX', '0BD48ZX', '0BD58ZX', '0BD68ZX', '0BD78ZX', '0BD88ZX', '0BD98ZX', '0BDB8ZX', '0BBC8ZX', '0BBD8ZX', '0BBF8ZX', '0BBG8ZX', '0BBJ8ZX', '0BBK8ZX', '0BBL8ZX', '0BDC8ZX', '0BDD8ZX', '0BDF8ZX', '0BDG8ZX', '0BDH8ZX', '0BDJ8ZX', '0BDK8ZX', '0BDL8ZX', '0BDM8ZX', '0BBM8ZX', '07B74ZX', '07D74ZX', '07D84ZX', '07D94ZX', '07DK4ZX', '0BJ08ZZ', '0BB18ZX', '0BD18ZX', '0BD28ZX')
+med.cpts  <- c('39400', '39401', '39402')
+# No iCD9 code for med
+med.icds  <- c('0WBC4ZX')
+sublobar.cpts  <- c('32484', '32500', '32657', '32505', '32506', '32607', '32608','32666', '32667', '32096', '32097', '32669')
 sublobar.icds  <-  c(  '3230', '3239', '3220', '3229',  # ICD9 codes for sublobar
                      '0BBC4ZX', '0BBC4ZZ', '0BBC0ZX', '0BBC0ZZ', '0BBD4ZX',
                      '0BBD4ZZ', '0BBD0ZX', '0BBD0ZZ', '0BBF4ZX', '0BBF4ZZ',
@@ -90,15 +102,17 @@ sublobar.icds  <-  c(  '3230', '3239', '3220', '3229',  # ICD9 codes for subloba
                      '0BBJ4ZX', '0BBJ4ZZ', '0BBJ0ZX', '0BBJ0ZZ', '0BBK4ZX',
                      '0BBK4ZZ', '0BBK0ZX', '0BBK0ZZ', '0BBL4ZX', '0BBL4ZZ',
                      '0BBL0ZX', '0BBL0ZZ')
+lobar.cpts  <- c('32480', '32482', '32486', '32663', '32520', '32503', '32504', '32522', '32525')
 lobar.icds  <-  c(  '3241', '3249', '0BTC4ZZ',  '0BTC0ZZ',  '0BTD4ZZ',
                   '0BTD0ZZ',  '0BTF4ZZ',  '0BTF0ZZ',  '0BTG4ZZ',  '0BTG0ZZ',
                   '0BTH4ZZ',  '0BTH0ZZ',  '0BTJ4ZZ',  '0BTJ0ZZ'  )
+other.resection.cpts  <- c('32440', '32442' , '32670', '32671')
 other.resection.icds  <-  c(  '3250', '3259', '326','321', '0BBM4ZX',
                             '0BBM4ZZ', '0BBM0ZX', '0BBM0ZZ', '0BTM4ZZ',
                             '0BTM0ZZ',  '0BTK4ZZ',  '0BTK0ZZ',  '0BTL4ZZ',
                             '0BTL0ZZ')
-sbrt.cpts  <-  c('77373', 'G0173', 'G0251', 'G0339', 'G0340', '61793',  '0082T' , '77435')
-
+bronch.icds  <- c('0BJ082Z')
+CPT_Codes %>% filter (HCPC %in% ebus.cpts )
 
 
 # sink('tbls/treatment.codes.txt'); 
@@ -323,7 +337,8 @@ dx.icd.codes  <-  unlist(dx.icd)
 dx.icd.codes[dx.icd.codes %in%  dx.icd.codes[ duplicated(dx.icd.codes)]]
 
 
-pet.scan.cpts <-c('78811', '78812', '78813', '78814', '78815', '78816', 'G0235')
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4401470/#SD2
+pet.scan.cpts <-c('78810', '78811', '78812', '78813', '78814', '78815', '78816','G0125', 'G0126', 'G0210','G0211', 'G0212', 'G0234', 'G0235')
 
 
 procs  <- list (

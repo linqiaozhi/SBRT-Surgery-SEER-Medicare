@@ -144,7 +144,7 @@ fn  <-  sprintf("%s/nch.lines.RDS", rds.path)
 if (!file.exists( fn )) {
     years  <-  as.character(2010:2020)
     carriers  <-  list()
-    for (yeari in 3:length(years)) {
+    for (yeari in 1:length(years)) {
         year  <-  years[yeari]
         dta.fn  <-  sprintf('%s/nch%s%s.line.dta.gz', dta.path,year , suffix)
         print(sprintf('Reading in %s', dta.fn))
@@ -161,8 +161,57 @@ if (!file.exists( fn )) {
 carrier <- carrier %>% mutate(
               valid.dx = LINE_ICD_DGNS_CD %in% valid.dxs ,
               sbrt =   HCPCS_CD %in% sbrt.cpts  & valid.dx,
-              sbrt.date  = if_else ( sbrt, CLM_THRU_DT, NA_character_) %>% ymd 
+              sbrt.date  = if_else ( sbrt, CLM_THRU_DT, NA_character_) %>% ymd ,
+              ebus =   HCPCS_CD %in% ebus.cpts  & valid.dx,
+              ebus.date  = if_else ( ebus, CLM_THRU_DT, NA_character_) %>% ymd ,
+              med =   HCPCS_CD %in% med.cpts  & valid.dx,
+              med.date  = if_else ( med, CLM_THRU_DT, NA_character_) %>% ymd ,
+              sublobar =   HCPCS_CD %in% sublobar.cpts  & valid.dx,
+              sublobar.date  = if_else ( sublobar, CLM_THRU_DT, NA_character_) %>% ymd ,
+              lobar =   HCPCS_CD %in% lobar.cpts  & valid.dx,
+              lobar.date  = if_else ( lobar, CLM_THRU_DT, NA_character_) %>% ymd ,
+              other.resection =   HCPCS_CD %in% other.resection.cpts  & valid.dx,
+              other.resection.date  = if_else ( other.resection, CLM_THRU_DT, NA_character_) %>% ymd 
 )
+
+################################
+# TODO: to remove 
+################################
+
+fofo  <- A.final %>% left_join(carrier %>% filter ( nna(sublobar.date)), by = 'PATIENT_ID')
+fofo %>% print (width=Inf)
+table( nna(fofo$sublobar.date.x), nna(fofo$sublobar.date.y), useNA="ifany")
+fofo %>% filter (tx == 'sublobar')  %>% print(width=Inf)
+fifi  <-  fofo %>% filter (is.na(sublobar.date.y) & nna(sublobar.date.x)) %>% select(PATIENT_ID, tx.date)
+
+table (year(fifi$tx.date))
+A.final %>% filter (PATIENT_ID == 'lnK2020w0122576') %>% t
+carrier %>% filter ( PATIENT_ID == 'lnK2020V1824015')
+
+fofo %>% select ( PATIENT_ID, tx, sublobar.date.x, sublobar.date.y) %>% print(n=10, width=Inf)
+A.final %>% select ( PATIENT_ID, tx, tx.date) %>% print(n=10, width=Inf)
+
+#
+pid  <-  'lnK2020w0006276'
+pid  <-  'lnK2020w0092275'
+pid  <-  'lnK2020V5472372'
+pid  <-  'lnK2020w0006276'
+pid  <-  'lnK2020w0122576'
+carrier %>% filter ( PATIENT_ID ==pid) %>% select(PATIENT_ID, CLM_THRU_DT,  HCPCS_CD, LINE_ICD_DGNS_CD,  sublobar.date) %>% print (n=Inf)
+medpar %>% filter ( PATIENT_ID ==pid)  %>% print (n=Inf, width=Inf)
+
+mbsf.long.ffs %>% filter ( PATIENT_ID == pid) %>% print(n =Inf)
+patient.mbsf %>% filter ( PATIENT_ID == pid) %>% print(n =Inf)
+
+# does not havea carreir code
+carrier %>% filter ( PATIENT_ID == 'lnK2020V3575264') %>% select(PATIENT_ID, CLM_THRU_DT,  HCPCS_CD, sublobar.date) %>% print (n=Inf)
+medpar %>% filter ( PATIENT_ID == 'lnK2020V3575264')  %>% print (n=Inf, width=Inf)
+
+fifi  <-  carrier %>%  filter (PATIENT_ID == 'lnK2020V1824015')
+table( year(ymd(carrier$CLM_THRU_DT)), useNA="ifany")
+
+prob  <- A.final %>% filter ( ! PATIENT_ID %in% carrier$PATIENT_ID)
+'lnK2020V1824015' %in% prob$PATIENT_ID
 
 #####################################
 # II.2.2 Outpatients: Outpatient files
@@ -498,35 +547,45 @@ mbsf.long  <- mbsf  %>%  select( PATIENT_ID,BENE_ENROLLMT_REF_YR,  MDCR_STATUS_C
                                         .fn = ~ gsub("HMO_IND", "HMOIND", .x),
                                         .cols = starts_with("HMO_IND")
                             )
-mbsf.long.ffs  <- mbsf.long %>% pivot_longer(cols = -c(PATIENT_ID, BENE_ENROLLMT_REF_YR), names_to = c(".value", "month" ), names_sep="_" ) %>%
+                            #TODO: The date was being - days(1). I undid this. Make sure it's OK
+sum_reset   <- function(x) accumulate( x, ~(.y!=0)*(.y+.x))
+mbsf.long.ffs  <- mbsf.long %>% 
+    pivot_longer(cols = -c(PATIENT_ID, BENE_ENROLLMT_REF_YR), names_to = c(".value", "month" ), names_sep="_" ) %>%
     mutate(year = BENE_ENROLLMT_REF_YR,
-           date = ceiling_date(ymd(sprintf('%d-%s-01', year, month)), 'month') - days(1))
-mbsf.pre.tx.months <- mbsf.long.ffs %>% right_join(patient.tx %>% select( PATIENT_ID, tx.date)) %>% 
-                            mutate (ffs.month = HMOIND %in% c(0,4) ) %>% 
-                            group_by(PATIENT_ID) %>% summarise( 
-                                                                pre.tx.months = sum(ffs.month & (date < tx.date)),
-                                                                total.ffs.months = sum(ffs.month)  )
+           date = ceiling_date(ymd(sprintf('%d-%s-01', year, month)), 'month') ) %>% 
+    arrange(PATIENT_ID, date) %>% 
+    group_by(PATIENT_ID) %>% 
+    mutate(ffs.month = HMOIND %in% c(0,4) , ffs.months.counter = sum_reset(1*ffs.month)) %>% 
+    ungroup()
+
+month.year  <- function(x)  sprintf('%s-%s', month(x), year(x))
+mbsf.long.ffs <- mbsf.long.ffs %>% mutate(  month.year = month.year(date) )
+patient.mbsf.months.counter  <- patient.tx %>% select( PATIENT_ID, tx.date) %>% 
+                                    mutate ( month.year = month.year(tx.date)) %>%
+                                left_join(mbsf.long.ffs %>% select(PATIENT_ID, month.year, ffs.months.counter)) %>%
+                                select(PATIENT_ID, ffs.months.counter)
+
+mbsf.long.ffs %>% filter ( PATIENT_ID == "lnK2020w0152289") %>% print(n =Inf)
+mbsf.long.ffs %>% filter ( PATIENT_ID == "lnK2020w0120963") %>% print(n =Inf) 
+0
+mbsf.long.ffs %>% filter ( PATIENT_ID == "lnK2020w0117871") %>% print(n =Inf)
+18
+
+patient.mbsf.total.ffs <- mbsf.long.ffs %>% 
+    right_join(patient.tx %>% select( PATIENT_ID, tx.date)) %>% 
+    group_by(PATIENT_ID) %>% 
+    summarise( 
+              pre.tx.months = sum(ffs.month & (date < tx.date)),
+              total.ffs.months = sum(ffs.month))
+
 patient.mbsf <- mbsf %>% mutate( 
                         death.date.mbsf.temp = ifelse(mbsf$BENE_DEATH_DT!= "" & mbsf$BENE_DEATH_DT != "       .", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd ) %>% 
                         group_by( PATIENT_ID) %>% 
                         summarise( 
                                   death.date.mbsf = first(na.omit(death.date.mbsf.temp))
-                            ) %>%
-                        right_join(mbsf.pre.tx.months)
-# table( mbsf.pre.tx.months$total.ffs.months, useNA="ifany")
-fofo  <- mbsf.long.ffs %>% group_by(PATIENT_ID) %>% summarise(year.length = max(BENE_ENROLLMT_REF_YR) - min(BENE_ENROLLMT_REF_YR), n.years = length(unique(BENE_ENROLLMT_REF_YR)))
-fofo %>% filter (n.years != year.length + 1 & PATIENT_ID %in% patient.mbsf$PATIENT_ID) %>% print(n=1000)
-
-patient.mbsf %>% filter ( PATIENT_ID == "lnK2020z5642987")
-
-mbsf.long.ffs %>% filter ( PATIENT_ID == "lnK2020z5642987") %>% print(n =Inf)
-patient.tx %>% filter ( PATIENT_ID == "lnK2020z5642987") %>% print(n =Inf)
-
-
-
-# fofo  <- mbsf %>%  mutate( death.date.mbsf.temp = ifelse(mbsf$BENE_DEATH_DT!= "" & mbsf$BENE_DEATH_DT != "       .", mbsf$BENE_DEATH_DT, NA_Date_) %>% ymd )
-# fofo %>% count(death.date.mbsf.temp, BENE_DEATH_DT, BENE_ENROLLMT_REF_YR) %>% print(n=Inf)
-# table( fofo$death.date.mbsf.temp, fofo$BENE_DEATH_DT, useNA="ifany")
+                            ) %>% 
+                        right_join(patient.mbsf.months.counter) %>% 
+                        right_join(patient.mbsf.total.ffs)
 
 ################################
 # Section VII Combine 
@@ -751,14 +810,14 @@ A.final  <-  A.final %>% filter (age >= 65 )
 incex(A.final)
 A.final  <-  A.final %>% filter (dx.to.tx <= 135 & dx.to.tx >= -16) # The diagnosis date is chosen to be the 15th of each month, as the date itself is not available
 incex(A.final)
-A.final  <-  A.final %>% filter (pre.tx.months >= 12 )
-incex(A.final)
+A.final  <-  A.final %>% filter ( ffs.months.counter >= 6 )
 A.final  <-  A.final %>% filter ((valid.pet.scan & tx=='sbrt') | tx=='sublobar')
 incex(A.final)
 A.final  <-  A.final %>% filter (valid.death.indicator )
 incex(A.final)
 A.final  <-  A.final %>% filter (microscopically_confirmed)
 incex(A.final)
+
 #TODO: Cross each treatment variable iwth a year to make sure no errors
 table( A.final$YEAR_OF_DIAGNOSIS,A.final$O2accessories_pre_month_count, useNA="ifany")
 A.final %>% group_by(YEAR_OF_DIAGNOSIS) %>% summarise( mean(nna(death)))
@@ -959,8 +1018,42 @@ A.final.sens1  %>%  write_rds( 'data/A.final5.sens1.RDS' )
 
 
 
+################################
+# Sens 2 
+################################
 
+A.final.sens2  <- A %>% filter ( histology !="Small cell" & histology != 'Other' & histology != 'Carcinoid' & histology != 'Adenosquamous' & histology != 'Large cell' & histology != 'Non-small cell carcinoma' )
+A.final.sens2  <-  A.final.sens2 %>% filter ( (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c")  )
+print(nrow(A.final.sens2))
+A.final.sens2  <-  A.final.sens2 %>% filter (tx %in% c('sublobar', 'sbrt') )
+A.final.sens2$tx  <- droplevels(A.final.sens2$tx)
+incex(A.final.sens2)
+A.final.sens2  <-  A.final.sens2 %>% filter (
+                                 (tx == 'sbrt' & ( (RADIATION_RECODE == "") | RADIATION_RECODE == "1") & (( RX_SUMM_SURG_PRIM_SITE_1998 != "") | RX_SUMM_SURG_PRIM_SITE_1998 == "0")  )  |
+                                  ( tx == 'sublobar' & ( is.na( RX_SUMM_SURG_PRIM_SITE_1998) |  RX_SUMM_SURG_PRIM_SITE_1998 %in% c(20, 21, 22, 23 ) )  )
+                             )
+incex(A.final.sens2)
+# A.final.sens2 <- A.final.sens2 %>% filter(  ( tx == 'sbrt' & RX_SUMM_SYSTEMIC_SURG_SEQ == "0") | (tx == 'sublobar' & RX_SUMM_SYSTEMIC_SURG_SEQ %in% c("0", "3")))
+# incex(A.final.sens2)
+A.final.sens2  <-  A.final.sens2 %>% filter (age >= 65 ) #TODO: <80
+incex(A.final.sens2)
+A.final.sens2  <-  A.final.sens2 %>% filter (dx.to.tx <= 135 & dx.to.tx >= -16) # The diagnosis date is chosen to be the 15th of each month, as the date itself is not available
+incex(A.final.sens2)
+# summary(A.final.sens2$dx.to.tx)
+A.final.sens2  <-  A.final.sens2 %>% filter (pre.tx.months >= 12)
+incex(A.final.sens2)
+# A.final.sens2  <-  A.final.sens2 %>% filter (( tx=='sbrt') | tx=='sublobar')
+A.final.sens2  <-  A.final.sens2 %>% filter (microscopically_confirmed)
+incex(A.final.sens2)
+A.final.sens2  <-  A.final.sens2 %>% filter (valid.death.indicator)
+incex(A.final.sens2)
 
+sum(A.final.sens2$tx == 'sublobar' & A.final.sens2$tnm.n %in% c('1','2','3')) / sum(A.final.sens2$tx == 'sublobar')
+sum(A.final.sens2$tx == 'sbrt' & A.final.sens2$tnm.n %in% c('1','2','3')) / sum(A.final.sens2$tx == 'sbrt')
+
+sum(A.final.sens2$tx == 'sublobar' & A.final.sens2$valid.pet.scan) / sum(A.final.sens2$tx == 'sublobar')
+sum(A.final.sens2$tx == 'sbrt' & A.final.sens2$valid.pet.scan) / sum(A.final.sens2$tx == 'sbrt')
+table( A.final.sens2$valid.pet.scan, A.final.sens2$tnm.n,A.final.sens2$tx, useNA="ifany")
 
 
 
