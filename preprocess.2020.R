@@ -45,8 +45,18 @@ source('file.paths.R')
 ################################
 
 lung.SEER <- read_dta(sprintf('%s/seerlung.%s.dta.gz', dta.path, suffix))
-patient.seer  <-  lung.SEER %>% filter(PRIMARY_SITE %in% valid.dxs) %>% filter( YEAR_OF_DIAGNOSIS>=2010 & YEAR_OF_DIAGNOSIS<=2019 )
-lung.SEER %>% count(PRIMARY_SITE) %>% arrange(-n) %>% print(n=1000)
+# This filtering is just to speed things up.
+patient.seer  <-  lung.SEER %>% filter(PRIMARY_SITE %in% valid.dxs) %>% filter( YEAR_OF_DIAGNOSIS>=2010 & YEAR_OF_DIAGNOSIS<=2019 ) 
+# %>% mutate( 
+#            tnm.t = case_when ( 
+#                               str_detect(DERIVED_EOD_2018_T_2018, '^T1*') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]1') | DERIVED_AJCC_T_7TH_ED_2010_2015 %>% between (100,190) | DERIVED_AJCC_T_7TH_ED_2010_2015 %>% between(800, 810) ~ '1',
+#                               str_detect(DERIVED_EOD_2018_T_2018, '^T2*') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]2') | DERIVED_AJCC_T_7TH_ED_2010_2015  %>% between (200,290)~ '2',
+#                               str_detect(DERIVED_EOD_2018_T_2018, '^T3') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]3') | DERIVED_AJCC_T_7TH_ED_2010_2015  %>% between (300,390) ~ '3',
+#                               str_detect(DERIVED_EOD_2018_T_2018, '^T4') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]4') | DERIVED_AJCC_T_7TH_ED_2010_2015  %>% between (400,499) ~ '4',
+#                               str_detect(DERIVED_EOD_2018_T_2018, '^TX') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]X') | DERIVED_AJCC_T_7TH_ED_2010_2015  == 888 ~ 'X',
+#                               T ~ NA_character_ ),
+#            ) 
+# patient.seer  <-  patient.seer %>% filter (tnm.t == '1')
 # Sequence number considers the patient's recorded lifetime: if only one
 # primary cancer, then it is 0. But if there are multiple, then the first will
 # be 1. So, to obtain patients with no prior malignancy history (ie. including
@@ -134,6 +144,7 @@ for (yeari in 1:length(years)) {
     print(sprintf('Reading in %s', fn))
     carrierbasei.small  <- readRDS(fn)
   }
+  carrierbasei.small  <- carrierbasei.small %>% distinct()
   carrierbases[[year]]  <-  carrierbasei.small
 }
 carrierbase  <-  bind_rows(carrierbases,  .id='dataset.year')
@@ -178,40 +189,55 @@ carrier <- carrier %>% mutate(
 # TODO: to remove 
 ################################
 
-fofo  <- A.final %>% left_join(carrier %>% filter ( nna(sublobar.date)), by = 'PATIENT_ID')
-fofo %>% print (width=Inf)
-table( nna(fofo$sublobar.date.x), nna(fofo$sublobar.date.y), useNA="ifany")
-fofo %>% filter (tx == 'sublobar')  %>% print(width=Inf)
-fifi  <-  fofo %>% filter (is.na(sublobar.date.y) & nna(sublobar.date.x)) %>% select(PATIENT_ID, tx.date)
+#fofo  <- A.final %>% left_join(carrier %>% filter ( nna(sublobar.date)), by = 'PATIENT_ID')
+#fofo %>% print (width=Inf)
+#table( nna(fofo$sublobar.date.x), nna(fofo$sublobar.date.y), useNA="ifany")
+#fofo %>% filter (tx == 'sublobar')  %>% print(width=Inf)
+#fifi  <-  fofo %>% filter (is.na(sublobar.date.y) & nna(sublobar.date.x)) %>% select(PATIENT_ID, tx.date)
 
-table (year(fifi$tx.date))
-A.final %>% filter (PATIENT_ID == 'lnK2020w0122576') %>% t
-carrier %>% filter ( PATIENT_ID == 'lnK2020V1824015')
+#table (year(fifi$tx.date))
+#A.final %>% filter (PATIENT_ID == 'lnK2020w0122576') %>% t
+#carrier %>% filter ( PATIENT_ID == 'lnK2020V1824015')
 
-fofo %>% select ( PATIENT_ID, tx, sublobar.date.x, sublobar.date.y) %>% print(n=10, width=Inf)
-A.final %>% select ( PATIENT_ID, tx, tx.date) %>% print(n=10, width=Inf)
+#fofo %>% select ( PATIENT_ID, tx, sublobar.date.x, sublobar.date.y) %>% print(n=10, width=Inf)
+#A.final %>% select ( PATIENT_ID, tx, tx.date) %>% print(n=10, width=Inf)
 
-#
-pid  <-  'lnK2020w0006276'
-pid  <-  'lnK2020w0092275'
-pid  <-  'lnK2020V5472372'
-pid  <-  'lnK2020w0006276'
-pid  <-  'lnK2020w0122576'
-carrier %>% filter ( PATIENT_ID ==pid) %>% select(PATIENT_ID, CLM_THRU_DT,  HCPCS_CD, LINE_ICD_DGNS_CD,  sublobar.date) %>% print (n=Inf)
-medpar %>% filter ( PATIENT_ID ==pid)  %>% print (n=Inf, width=Inf)
+##
+#carrier.temp  <-  carrier %>% filter (nna(sublobar.date))
+#medpar.temp  <-  medpar %>% filter (nna(sublobar.date))
+#medpar.carrier.temp  <- full_join(carrier.temp, medpar.temp, by = 'PATIENT_ID')
+#medpar.carrier.temp %>% filter ( is.na(sublobar.date.x), nna(sublobar.date.y)) %>% select( PATIENT_ID, sublobar.date.y) %>% print(n=30, width=Inf)
+#medpar.carrier.temp %>% filter ( is.na(sublobar.date.y), nna(sublobar.date.x)) %>% select( PATIENT_ID, sublobar.date.x) %>% print(n=30, width=Inf)
 
-mbsf.long.ffs %>% filter ( PATIENT_ID == pid) %>% print(n =Inf)
-patient.mbsf %>% filter ( PATIENT_ID == pid) %>% print(n =Inf)
+## x is carrier
+#table( nna(medpar.carrier.temp$sublobar.date.x),nna(medpar.carrier.temp$sublobar.date.y), useNA="ifany")
 
-# does not havea carreir code
-carrier %>% filter ( PATIENT_ID == 'lnK2020V3575264') %>% select(PATIENT_ID, CLM_THRU_DT,  HCPCS_CD, sublobar.date) %>% print (n=Inf)
-medpar %>% filter ( PATIENT_ID == 'lnK2020V3575264')  %>% print (n=Inf, width=Inf)
+#pid  <-  'lnK2020w0006276'
+#pid  <-  'lnK2020w0092275'
+#pid  <-  'lnK2020V5472372'
+#pid  <-  'lnK2020w0006276'
+#pid  <-  'lnK2020w2536929'
+#carrier %>% filter ( PATIENT_ID ==pid) %>% select(PATIENT_ID, CLM_THRU_DT,  HCPCS_CD, LINE_ICD_DGNS_CD,  sublobar.date) %>% print (n=Inf)
+#medpar %>% filter ( PATIENT_ID ==pid)  %>% print (n=Inf, width=Inf)
 
-fifi  <-  carrier %>%  filter (PATIENT_ID == 'lnK2020V1824015')
-table( year(ymd(carrier$CLM_THRU_DT)), useNA="ifany")
 
-prob  <- A.final %>% filter ( ! PATIENT_ID %in% carrier$PATIENT_ID)
-'lnK2020V1824015' %in% prob$PATIENT_ID
+
+
+
+
+
+#mbsf.long.ffs %>% filter ( PATIENT_ID == pid) %>% print(n =Inf)
+#patient.mbsf %>% filter ( PATIENT_ID == pid) %>% print(n =Inf)
+
+## does not havea carreir code
+#carrier %>% filter ( PATIENT_ID == 'lnK2020V3575264') %>% select(PATIENT_ID, CLM_THRU_DT,  HCPCS_CD, sublobar.date) %>% print (n=Inf)
+#medpar %>% filter ( PATIENT_ID == 'lnK2020V3575264')  %>% print (n=Inf, width=Inf)
+#table( A.final$tx, A.final$RX_SUMM_SURG_PRIM_SITE_1998, useNA="ifany")
+#fifi  <-  carrier %>%  filter (PATIENT_ID == 'lnK2020V1824015')
+#table( year(ymd(carrier$CLM_THRU_DT)), useNA="ifany")
+
+#prob  <- A.final %>% filter ( ! PATIENT_ID %in% carrier$PATIENT_ID)
+#'lnK2020V1824015' %in% prob$PATIENT_ID
 
 #####################################
 # II.2.2 Outpatients: Outpatient files
@@ -268,48 +294,119 @@ outpat.outpat.revenue <- outpat.outpat.revenue %>% mutate(
     sbrt.date  =  if_else ( sbrt, CLM_THRU_DT.x, as.Date(NA_Date_) )
 )
 
+#################################
+## TODO: Delete 
+#################################
+
+#medpar.tx  <-   medpar %>% select ( PATIENT_ID, sbrt.date, sublobar.date, lobar.date, other.resection.date) %>% filter(!is.na(sbrt.date) | !is.na(sublobar.date) | ! is.na(lobar.date) )
+#carrier.tx  <-  carrier %>% select(PATIENT_ID, sbrt.date) %>% filter(!is.na(sbrt.date))
+#outpat.tx  <-  outpat.outpat.revenue %>% select(PATIENT_ID, sbrt.date) %>% filter(!is.na(sbrt.date))
+#patient.tx  <- bind_rows ( medpar.tx, carrier.tx, outpat.tx)
+#patient.tx <- patient.tx %>% arrange(PATIENT_ID, sbrt.date, sublobar.date, lobar.date) 
+#patient.tx <- patient.tx %>% group_by(PATIENT_ID) %>% 
+#    summarise ( 
+#               sbrt.date = first(na.omit(sbrt.date)),
+#               sublobar.date = first(na.omit(sublobar.date)),
+#               lobar.date = first(na.omit(lobar.date)),
+#               other.resection.date = first(na.omit(other.resection.date))
+#    )
+#patient.tx <- patient.tx %>% left_join(patient.seer %>% select (PATIENT_ID, RADIATION_RECODE, RX_SUMM_SURG_RAD_SEQ, RX_SUMM_SURG_PRIM_SITE_1998))
+
+
+## Care must be taken when excluding patients who underwent other types of
+## resection.  A patient is included in the sublobar group if he/she underwent
+## SBRT as the primary treatment. If later he/she received some additional
+## resection or even SBRT as rescue therapy, this patient should still be
+## included. This is because we are simulating a target trial where patients are
+## ``randomized'' at time of treatment and we are doing an intention to treat
+## analysis.  Same goes for the SBRT group.
+#patient.tx <- patient.tx %>% mutate( 
+#                tx = factor( case_when ( 
+#                      nna( sbrt.date)  &  
+#                          ( is.na(sublobar.date) | sbrt.date < sublobar.date) & ( is.na(lobar.date) | sbrt.date < lobar.date) & ( is.na(other.resection.date) | sbrt.date < other.resection.date) ~ 'sbrt',
+#                      nna( sublobar.date)  &  
+#                          ( is.na(sbrt.date) | sublobar.date < sbrt.date) & ( is.na(lobar.date) | sublobar.date < lobar.date) & ( is.na(other.resection.date) | sublobar.date < other.resection.date) ~ 'sublobar',
+#                      nna( lobar.date)  &  
+#                          ( is.na(sbrt.date) | lobar.date < sbrt.date) & ( is.na(sublobar.date) | lobar.date < sublobar.date) & ( is.na(other.resection.date) | lobar.date < other.resection.date) ~ 'lobar',
+#                     T ~ (NA_character_)
+#                     ), levels = c('sublobar', 'sbrt', 'lobar')),
+#               tx.date = case_when (
+#                                    tx == 'sbrt' ~ sbrt.date,
+#                                    tx == 'sublobar' ~ sublobar.date,
+#                                    tx == 'lobar' ~ lobar.date,
+#                                    T ~ ymd(NA_character_)
+#                                    ),
+#               ) 
+
+
+##TODO: delete
+#carrier %>% filter (PATIENT_ID == pid, nna(sublobar.date)) %>% print(n=Inf, width=Inf)
+#year  <- '2015'
+#dta.fn  <-  sprintf('%s/nch%s%s.base.dta.gz', dta.path, year, suffix )
+#print(sprintf('Reading in %s', dta.fn))
+#carrierbasei  <-   read_dta(dta.fn) #
+#carrierbasei.small %>% distinct() %p>% filter (PATIENT_ID == pid, CLM_FROM_DT == '20151109') %>% print(width=Inf)
+
+
 ################################
 # II.3 Combine all three sources of treatment codes
 ################################
 medpar.tx  <-   medpar %>% select ( PATIENT_ID, sbrt.date, sublobar.date, lobar.date, other.resection.date) %>% filter(!is.na(sbrt.date) | !is.na(sublobar.date) | ! is.na(lobar.date) )
-carrier.tx  <-  carrier %>% select(PATIENT_ID, sbrt.date) %>% filter(!is.na(sbrt.date))
+carrier.tx  <-  carrier %>% select( PATIENT_ID, sbrt.date, sublobar.date, lobar.date, other.resection.date) %>% filter(!is.na(sbrt.date) | !is.na(sublobar.date) | ! is.na(lobar.date) )
 outpat.tx  <-  outpat.outpat.revenue %>% select(PATIENT_ID, sbrt.date) %>% filter(!is.na(sbrt.date))
-patient.tx  <- bind_rows ( medpar.tx, carrier.tx, outpat.tx)
-patient.tx <- patient.tx %>% arrange(PATIENT_ID, sbrt.date, sublobar.date, lobar.date) 
-patient.tx <- patient.tx %>% group_by(PATIENT_ID) %>% 
-    summarise ( 
+medicare.tx  <- bind_rows ( medpar.tx, carrier.tx, outpat.tx) %>% arrange(PATIENT_ID, sbrt.date, sublobar.date, lobar.date)
+
+seer.tx  <- patient.seer %>% mutate (    seer.sublobar  = RX_SUMM_SURG_PRIM_SITE_1998 %in% c("20", "21", "22", "23" ),
+                                         seer.lobar     = RX_SUMM_SURG_PRIM_SITE_1998 %in% c("30", "32", "33", "45", "46", "47", "48"),
+                                         seer.other.resection     = RX_SUMM_SURG_PRIM_SITE_1998 %in% c("55", "65", "66") )
+patient.tx  <- seer.tx %>% 
+    left_join (medicare.tx , by = 'PATIENT_ID') %>% 
+    group_by(PATIENT_ID) %>% 
+    summarise (  
+               tx = factor( case_when ( 
+                                       all(seer.sublobar) & any(nna ( sublobar.date))  ~ 'sublobar',
+                                       all(seer.lobar) & any(nna ( lobar.date))  ~ 'lobar',
+                                       all(seer.other.resection) & any(nna ( other.resection.date))  ~ 'other.resection',
+                                        any(nna ( sbrt.date))  ~ 'sbrt',
+                                       T ~ (NA_character_)
+                                       ), levels = c('sublobar', 'sbrt', 'lobar', 'other.resection')),
                sbrt.date = first(na.omit(sbrt.date)),
                sublobar.date = first(na.omit(sublobar.date)),
                lobar.date = first(na.omit(lobar.date)),
-               other.resection.date = first(na.omit(other.resection.date))
-    )
-patient.tx <- patient.tx %>% left_join(patient.seer %>% select (PATIENT_ID, RADIATION_RECODE, RX_SUMM_SURG_RAD_SEQ, RX_SUMM_SURG_PRIM_SITE_1998))
-
-
-# Care must be taken when excluding patients who underwent other types of
-# resection.  A patient is included in the sublobar group if he/she underwent
-# SBRT as the primary treatment. If later he/she received some additional
-# resection or even SBRT as rescue therapy, this patient should still be
-# included. This is because we are simulating a target trial where patients are
-# ``randomized'' at time of treatment and we are doing an intention to treat
-# analysis.  Same goes for the SBRT group.
-patient.tx <- patient.tx %>% mutate( 
-                tx = factor( case_when ( 
-                      nna( sbrt.date)  &  
-                          ( is.na(sublobar.date) | sbrt.date < sublobar.date) & ( is.na(lobar.date) | sbrt.date < lobar.date) & ( is.na(other.resection.date) | sbrt.date < other.resection.date) ~ 'sbrt',
-                      nna( sublobar.date)  &  
-                          ( is.na(sbrt.date) | sublobar.date < sbrt.date) & ( is.na(lobar.date) | sublobar.date < lobar.date) & ( is.na(other.resection.date) | sublobar.date < other.resection.date) ~ 'sublobar',
-                      nna( lobar.date)  &  
-                          ( is.na(sbrt.date) | lobar.date < sbrt.date) & ( is.na(sublobar.date) | lobar.date < sublobar.date) & ( is.na(other.resection.date) | lobar.date < other.resection.date) ~ 'lobar',
-                     T ~ (NA_character_)
-                     ), levels = c('sublobar', 'sbrt', 'lobar')),
+               other.resection.date = first(na.omit(other.resection.date)),
                tx.date = case_when (
                                     tx == 'sbrt' ~ sbrt.date,
                                     tx == 'sublobar' ~ sublobar.date,
                                     tx == 'lobar' ~ lobar.date,
                                     T ~ ymd(NA_character_)
-                                    ),
-               ) 
+                                    ),)  %>% filter (nna(tx))
+# patient.tx <- patient.tx %>% left_join(patient.seer %>% select (PATIENT_ID, RADIATION_RECODE, RX_SUMM_SURG_RAD_SEQ, RX_SUMM_SURG_PRIM_SITE_1998))
+
+
+# # Care must be taken when excluding patients who underwent other types of
+# # resection.  A patient is included in the sublobar group if he/she underwent
+# # SBRT as the primary treatment. If later he/she received some additional
+# # resection or even SBRT as rescue therapy, this patient should still be
+# # included. This is because we are simulating a target trial where patients are
+# # ``randomized'' at time of treatment and we are doing an intention to treat
+# # analysis.  Same goes for the SBRT group.
+# patient.tx <- patient.tx %>% mutate( 
+#                 tx = factor( case_when ( 
+#                       nna( sbrt.date)  &  
+#                           ( is.na(sublobar.date) | sbrt.date < sublobar.date) & ( is.na(lobar.date) | sbrt.date < lobar.date) & ( is.na(other.resection.date) | sbrt.date < other.resection.date) ~ 'sbrt',
+#                       nna( sublobar.date)  &  
+#                           ( is.na(sbrt.date) | sublobar.date < sbrt.date) & ( is.na(lobar.date) | sublobar.date < lobar.date) & ( is.na(other.resection.date) | sublobar.date < other.resection.date) ~ 'sublobar',
+#                       nna( lobar.date)  &  
+#                           ( is.na(sbrt.date) | lobar.date < sbrt.date) & ( is.na(sublobar.date) | lobar.date < sublobar.date) & ( is.na(other.resection.date) | lobar.date < other.resection.date) ~ 'lobar',
+#                      T ~ (NA_character_)
+#                      ), levels = c('sublobar', 'sbrt', 'lobar')),
+#                tx.date = case_when (
+#                                     tx == 'sbrt' ~ sbrt.date,
+#                                     tx == 'sublobar' ~ sublobar.date,
+#                                     tx == 'lobar' ~ lobar.date,
+#                                     T ~ ymd(NA_character_)
+#                                     ),
+#                ) 
 
 
 ################################
@@ -600,7 +697,8 @@ A  <-  patient.seer %>%
     left_join( patient.dx, by = 'PATIENT_ID') %>% 
     left_join( patient.outpatient.procs, by = 'PATIENT_ID',) %>% 
     left_join( patient.mbsf, by = 'PATIENT_ID') %>%
-    left_join( patient.tx %>% select( -RADIATION_RECODE, -RX_SUMM_SURG_PRIM_SITE_1998, - RX_SUMM_SURG_RAD_SEQ), by = 'PATIENT_ID') %>% 
+    # left_join( patient.tx %>% select( -RADIATION_RECODE, -RX_SUMM_SURG_PRIM_SITE_1998, - RX_SUMM_SURG_RAD_SEQ), by = 'PATIENT_ID') %>% 
+     left_join( patient.tx , by = 'PATIENT_ID') %>% 
     left_join( patient.drugs, by = 'PATIENT_ID')  
 A  <-  A %>% 
     rename ( 
@@ -821,6 +919,32 @@ incex(A.final)
 #TODO: Cross each treatment variable iwth a year to make sure no errors
 table( A.final$YEAR_OF_DIAGNOSIS,A.final$O2accessories_pre_month_count, useNA="ifany")
 A.final %>% group_by(YEAR_OF_DIAGNOSIS) %>% summarise( mean(nna(death)))
+
+
+
+A.final %>% select(PATIENT_ID, tx, tx.date, RX_SUMM_SYSTEMIC_SURG_SEQ)
+# # A tibble: 4,669 × 4
+#    PATIENT_ID      tx       tx.date    RX_SUMM_SYSTEMIC_SURG_SEQ
+#    <chr>           <fct>    <date>     <chr>                    
+#  1 lnK2020V4804824 sbrt     2019-05-06 0                        
+#  2 lnK2020w0006276 sublobar 2014-01-14 0                        
+#  3 lnK2020w0007229 sbrt     2012-07-19 0                        
+#  4 lnK2020w0030485 sublobar 2014-04-23 0                        
+#  5 lnK2020w0051153 sbrt     2014-07-15 0                        
+#  6 lnK2020w0055880 sublobar 2016-01-06 0                        
+#  7 lnK2020w0101921 sbrt     2016-02-25 0                        
+#  8 lnK2020w0102986 sublobar 2015-11-09 0                        
+#  9 lnK2020w0103011 sbrt     2017-06-13 0                        
+# 10 lnK2020w0106009 sublobar 2010-11-30 0                        
+# # … with 4,659 more rows
+# # ℹ Use `print(n = ...)` to see more rows
+
+fofo  <-  A.final %>% left_join( carrier.tx, by = "PATIENT_ID")  %>% left_join( medpar.tx, by="PATIENT_ID")
+pid  <-  'lnK2020w0102986'
+medpar.tx %>% filter (PATIENT_ID == pid)
+carrier.tx %>% filter (PATIENT_ID == pid)
+medpar %>% filter (PATIENT_ID == pid) %>% print(width = Inf)
+A.final %>% filter (PATIENT_ID == pid) %>% print(width = Inf)
 
 # incex(A.final)
 # # summary(A.final$dx.to.tx)
