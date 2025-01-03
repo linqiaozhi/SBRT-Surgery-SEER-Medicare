@@ -80,8 +80,28 @@ valid.dxs  <- c( expand_range('1622','1629'),
                 expand_range(as.icd10('C34'), as.icd10('C349')),
                 expand_range(as.icd10('R91'), as.icd10('R918')))
 
-sbrt.icds  <-  c('9230', '9231', '9232', '9233', '9239', 'DB22DZ', 'DB22HZZ', 'DB22JZZ')
-sbrt.cpts  <-  c('77373', 'G0173', 'G0251', 'G0339', 'G0340', '61793',  '0082T' , '77435')
+sbrt.icds  <-  c(
+                 # ICD9 PCS, https://www.ahd.com/reference/ICD9desc_proc_CMS2015.pdf
+                 '9230',  # Stereo radiosurgery NOS 
+                '9231',  #Sing source radiosurgery
+                 '9232', # Multisource radiosurgery 
+                 '9233', # Particulate radiosurgery 
+                 '9239', # Stereo radiosurgery NEC 
+                 # ICD10, https://www.icd10data.com/search?s=DB22JZZ
+                 'DB22DZ', #Stereotactic Other Photon Radiosurgery of Lung
+                 'DB22HZZ', # Stereotactic Particulate Radiosurgery of Lung
+                 'DB22JZZ') # Stereotactic Gamma Beam Radiosurgery of Lung
+
+sbrt.cpts  <-  c('77373', # STEREOTACTIC BODY RADIATION THERAPY, TREATMENT DELIVERY, PER FRACTION TO 1 OR MORE LESIONS, INCLUDING IMAGE GUIDANCE, ENTIRE COURSE NOT TO EXCEED 5 FRACTIONS
+                '77435', #STEREOTACTIC BODY RADIATION THERAPY, TREATMENT MANAGEMENT, PER TREATMENT COURSE, TO 1 OR MORE LESIONS, INCLUDING IMAGE GUIDANCE, ENTIRE COURSE NOT TO EXCEED 5 FRACTIONS
+
+                # G codes are all terminated during study time, so including here
+                'G0173',  # Linear accelerator based stereotactic radiosurgery, complete course of therapy in one session
+                'G0251', # Linear accelerator based stereotactic radiosurgery, delivery including collimator changes and custom plugging, fractionated treatment, all lesions, per session, maximum five sessions per course of treatment
+                'G0339', # IMAGE-GUIDED ROBOTIC LINEAR ACCELERATOR-BASED STEREOTACTIC RADIOSURGERY, COMPLETE COURSE OF THERAPY IN ONE SESSION OR FIRST SESSION OF FRACTIONATED TREATMENT
+
+                'G0340'#IMAGE-GUIDED ROBOTIC LINEAR ACCELERATOR-BASED STEREOTACTIC RADIOSURGERY, DELIVERY INCLUDING COLLIMATOR CHANGES AND CUSTOM PLUGGING, FRACTIONATED TREATMENT, ALL LESIONS, PER SESSION, SECOND THROUGH FIFTH SESSIONS, MAXIMUM FIVE SESSIONS PER COURSE OF TREATMENT
+)
 
 ebus.cpts  <- c('31620', '31652', '31653', '31654')
 # https://www.bostonscientific.com/content/dam/bostonscientific/Reimbursement/Pulmonary/pdf/EBUS_Coding_and_Payment_Quick_Reference.pdf
@@ -89,28 +109,85 @@ ebus.cpts  <- c('31620', '31652', '31653', '31654')
 ebus.icds  <- c()
 #Biopsy or cytology via bronch. Not including bronch without  tissue.
 bronch.bx.cpts  <- c( '31625', '31628', '31629', '31632', '31633', '31622', '31623', '31624')
-bronch.bx.icds  <- c('3201',  '3324', '3327', '0BB28ZX', '0BB38ZX', '0BB48ZX', '0BB58ZX', '0BB68ZX', '0BB78ZX', '0BB88ZX', '0BB98ZX', '0BBB8ZX', '0BD38ZX', '0BD48ZX', '0BD58ZX', '0BD68ZX', '0BD78ZX', '0BD88ZX', '0BD98ZX', '0BDB8ZX', '0BBC8ZX', '0BBD8ZX', '0BBF8ZX', '0BBG8ZX', '0BBJ8ZX', '0BBK8ZX', '0BBL8ZX', '0BDC8ZX', '0BDD8ZX', '0BDF8ZX', '0BDG8ZX', '0BDH8ZX', '0BDJ8ZX', '0BDK8ZX', '0BDL8ZX', '0BDM8ZX', '0BBM8ZX', '07B74ZX', '07D74ZX', '07D84ZX', '07D94ZX', '07DK4ZX', '0BJ08ZZ', '0BB18ZX', '0BD18ZX', '0BD28ZX')
+bronch.bx.icds  <- c('3201',  '3324', '3327', 
+                     '0BB28ZX', '0BB38ZX', '0BB48ZX', '0BB58ZX', '0BB68ZX', '0BB78ZX', '0BB88ZX', '0BB98ZX', '0BBB8ZX', '0BD38ZX', '0BD48ZX', '0BD58ZX', '0BD68ZX', '0BD78ZX', '0BD88ZX', '0BD98ZX', '0BDB8ZX', '0BBC8ZX', '0BBD8ZX', '0BBF8ZX', '0BBG8ZX', '0BBJ8ZX', '0BBK8ZX', '0BBL8ZX', '0BDC8ZX', '0BDD8ZX', '0BDF8ZX', '0BDG8ZX', '0BDH8ZX', '0BDJ8ZX', '0BDK8ZX', '0BDL8ZX', '0BDM8ZX', '0BBM8ZX', '07B74ZX', '07D74ZX', '07D84ZX', '07D94ZX', '07DK4ZX', '0BJ08ZZ', '0BB18ZX', '0BD18ZX', '0BD28ZX')
 med.cpts  <- c('39400', '39401', '39402')
 # No iCD9 code for med
 med.icds  <- c('0WBC4ZX')
-sublobar.cpts  <- c('32484', '32500', '32657', '32505', '32506', '32607', '32608','32666', '32667', '32096', '32097', '32669')
-sublobar.icds  <-  c(  '3230', '3239', '3220', '3229',  # ICD9 codes for sublobar
-                     '0BBC4ZX', '0BBC4ZZ', '0BBC0ZX', '0BBC0ZZ', '0BBD4ZX',
-                     '0BBD4ZZ', '0BBD0ZX', '0BBD0ZZ', '0BBF4ZX', '0BBF4ZZ',
-                     '0BBF0ZX', '0BBF0ZZ', '0BBG4ZX', '0BBG4ZZ', '0BBG0ZX',
-                     '0BBG0ZZ', '0BBH4ZX', '0BBH4ZZ', '0BBH0ZX', '0BBH0ZZ',
-                     '0BBJ4ZX', '0BBJ4ZZ', '0BBJ0ZX', '0BBJ0ZZ', '0BBK4ZX',
-                     '0BBK4ZZ', '0BBK0ZX', '0BBK0ZZ', '0BBL4ZX', '0BBL4ZZ',
-                     '0BBL0ZX', '0BBL0ZZ')
-lobar.cpts  <- c('32480', '32482', '32486', '32663', '32520', '32503', '32504', '32522', '32525')
-lobar.icds  <-  c(  '3241', '3249', '0BTC4ZZ',  '0BTC0ZZ',  '0BTD4ZZ',
-                  '0BTD0ZZ',  '0BTF4ZZ',  '0BTF0ZZ',  '0BTG4ZZ',  '0BTG0ZZ',
-                  '0BTH4ZZ',  '0BTH0ZZ',  '0BTJ4ZZ',  '0BTJ0ZZ'  )
-other.resection.cpts  <- c('32440', '32442' , '32670', '32671')
-other.resection.icds  <-  c(  '3250', '3259', '326','321', '0BBM4ZX',
-                            '0BBM4ZZ', '0BBM0ZX', '0BBM0ZZ', '0BTM4ZZ',
-                            '0BTM0ZZ',  '0BTK4ZZ',  '0BTK0ZZ',  '0BTL4ZZ',
-                            '0BTL0ZZ')
+sublobar.cpts  <- c(
+                        '32484', # The provider removes a segment of the lung smaller than a lobe.
+                         '32500', # Partial removal of lung
+                         '32657', #aThoracoscopy, surgical; with wedge resection of lung, single or multiple
+                         '32505', # Thoracotomy; with therapeutic wedge resection (eg, mass, nodule), initial
+                         '32506', # Thoracotomy; with therapeutic wedge resection (eg, mass or nodule), each additional resection, ipsilateral (List separately in addition to code for primary procedure) 
+                         '32602', # Thoracoscopy, diagnostic (separate procedure); lungs and pleural space, with biopsy
+                         '32607', # with diagnostic wedge resection followed by anatomic lung resection (List separately in addition to code for primary procedure)
+                         '32608', # with diagnostic biopsy(ies) of lung nodule(s) or mass(es) (eg, wedge, incisional), unilateral
+                        '32666', # with therapeutic wedge resection (eg, mass, nodule), initial unilateral
+                         '32667', # with therapeutic wedge resection (eg, mass or nodule), each additional resection, ipsilateral (List separately in addition to code for primary procedure)
+                         '32096', # Thoracotomy, with diagnostic biopsy(ies) of lung infiltrate(s) (eg, wedge, incisional), unilateral
+                         '32097', # Thoracotomy, with diagnostic biopsy(ies) of lung nodule(s) or mass(es) (eg, wedge, incisional), unilateral 
+                         '32669') # Thoracoscopy, surgical; with removal of a single lung segment (segmentectomy)
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6465427/
+sublobar.icds  <-  c(  '3230', 
+                     '3239', 
+                     '3220', 
+                     '3229',  
+                     # ICD10: 
+                     #1-2: 0B is lung. 
+                     #3: B is excision (as opposed to complete resection)
+                     #4: C-J are the different lobes, but will include K,L which are usnpecificed lung excisions
+                     #5: 0 (open),  4(percutaneous endoscopic),  
+                     #6: Z no device
+                     #7: X diagnostic, Z therapeutic
+                     # So each site has four: 0BB[C-L][0,4]Z[XZ]
+                     '0BBC4ZX', '0BBC4ZZ', '0BBC0ZX', '0BBC0ZZ', 
+                     '0BBD4ZX', '0BBD4ZZ', '0BBD0ZX', '0BBD0ZZ', 
+                     '0BBF4ZX', '0BBF4ZZ', '0BBF0ZX', '0BBF0ZZ', 
+                     '0BBG4ZX', '0BBG4ZZ', '0BBG0ZX', '0BBG0ZZ', 
+                     '0BBH4ZX', '0BBH4ZZ', '0BBH0ZX', '0BBH0ZZ',
+                     '0BBJ4ZX', '0BBJ4ZZ', '0BBJ0ZX', '0BBJ0ZZ', 
+                     '0BBK4ZX', '0BBK4ZZ', '0BBK0ZX', '0BBK0ZZ', 
+                     '0BBL4ZX', '0BBL4ZZ', '0BBL0ZX', '0BBL0ZZ'
+)
+lobar.cpts  <- c('32480', #Removal of lung, other than pneumonectomy; single lobe (lobectomy)
+                 '32663',  # Thoracoscopy, surgical; with lobectomy (single lobe
+                 '32486', #Removal of lung, other than pneumonectomy; with circumferential resection of segment of bronchus followed by broncho-bronchial anastomosis (sleeve lobectomy)
+                 '32482', # Removal of lung, other than pneumonectomy; 2 lobes (bilobectomy)
+               '32670',  # Thoracoscopy, surgical; with removal of two lobes (bilobectomy)
+                '32488' # completion lobectomy 
+               )
+lobar.icds  <-  c(  '3241', '3249', 
+                 # ICD10: 
+                 #1-2: 0B is lung. 
+                 #3: T is resection 
+                 #4: C-J are the different lobes
+                 #5: 0 (open),  4(percutaneous endoscopic),  
+                 #6: Z no device
+                 #7: Z therapeutic
+                 # So each lobe has two: 0BT[C-M][0,4]Z[XZ]
+                  '0BTC4ZZ',  '0BTC0ZZ',  
+                  '0BTD4ZZ', '0BTD0ZZ',  
+                  '0BTF4ZZ',  '0BTF0ZZ',  
+                  '0BTG4ZZ',  '0BTG0ZZ',
+                  '0BTH4ZZ',  '0BTH0ZZ',  
+                  '0BTJ4ZZ',  '0BTJ0ZZ'  
+)
+other.resection.cpts  <- c('32440', #Removal of lung, pneumonectomy
+                           '32442' , #Removal of lung, pneumonectomy; with resection of segment of trachea followed by broncho-tracheal anastomosis (sleeve pneumonectomy)
+                             '32520',  # Remove lung and revise chest
+                             '32522',  # Remove lung and revise chest
+                             '32525',  # Remove lung and revise chest
+                           '32445', #Removal of lung, pneumonectomy.
+                           '32503', #(resection of an apical lung tumor without chest wall reconstruction) 
+                           '32504', # (resection of an apical lung tumor with chest wall reconstruction)
+                           '32671' # Thoracoscopic pneumonectomy
+)
+other.resection.icds  <-  c(  '3250', '3259', '326','321', 
+                            '0BBM4ZX', '0BBM4ZZ', '0BBM0ZX', '0BBM0ZZ', #Excision of Bilateral Lungs, 
+                            '0BTM4ZZ', '0BTM0ZZ',  #Resection of bilateral lungs
+                            '0BTK4ZZ',  '0BTK0ZZ',  # Resection of Right Lung, Percutaneous Endoscopic Approach
+                            '0BTL4ZZ', '0BTL0ZZ')
 bronch.icds  <- c('0BJ082Z')
 CPT_Codes %>% filter (HCPC %in% ebus.cpts )
 
@@ -208,6 +285,9 @@ dx.icd   <- list (
      'diverticular_disease' = list(
         'icd9' = expand_range('562','56213'     ) ,
         'icd10' =  expand_range('K57', 'K5793')     ),
+     'diverticulitis' = list(
+        'icd9' = c('56211', '56213') ,
+        'icd10' =  expand_range('K572', 'K5733')     ),
      'hernia' = list(
         'icd9' = c( expand_range('550', '5539')     ) ,
         'icd10' =  expand_range('K40', 'K469')     ),
