@@ -13,39 +13,26 @@ library('ggtext')
 library(ggplot2)
 source('utilities.R')
 source('two.step.variable.selection.R')
-alpha  <- 1
 
-variable.selection  <- 'automatic'
-subset.names  <- list(    'all.gte.65')
- subset.name  <- 'sens1'
- subset.name  <- 'all.gte.65'
- subset.names  <- list(     'sens1', 'all.gte.65')
-  # subset.names  <- list(     'sens1')
- for (subset.name in subset.names ){
+subset.names  <- list(     'sens1', 'all.gte.65')
+for (subset.name in subset.names ){
         # Each analysis is separate, so set the seed for reproducibility. If
         # it's set outside the loop then the results can only be reproduced by
         # rerunning the entire script.
         set.seed(3)
-        outcome.names  <-  c( 'death', 'death.cause.specific', 'death.90.day',  'death.other.cause.gt90day')
         outcome.names  <-  c( 'death', 'death.cause.specific', 'death.other.cause.gt90day',  'death.copd','death.heart',   'death.noncopd.nonheart')
-          # W1  <-  'death.nonheart'
-           # W1  <-  'death.noncopd'
-           # W1  <-  'death.other.cause.gt90day'
-           # W1  <-  'death.nonstroke'
-           # W1  <-  'death.nonstroke'
-        # W1s  <- c('death.other.cause.gt90day', 'death.copd', 'death.heart', 'death.noncopd.nonheart', 'death.noncopd.nonheart.nonstroke')
         W1s  <-  list(
                     'death' = 'death.other.cause.gt90day', 
                     'death.cause.specific' = 'death.other.cause.gt90day', 
                     'death.other.cause.gt90day' = 'death.other.cause.gt90day', 
                     'death.copd' = 'death.noncopd', 
                     'death.heart' = 'death.nonheart',
-                    # 'death.other' = 'death.nonother',
                     'death.stroke' = 'death.nonstroke',
                      'death.noncopd.nonheart.nonstroke' = 'death.copd.heart.stroke' 
                     )
         outcome.names  <- names(W1s)
-tt.min <- 30
+        # After tt.min (days), W is a valid negative outcome
+        tt.min <- 30
         analysis.name  <- sprintf('v11.tte.ttmin30.%s', subset.name)
         print('====================')
         print(analysis.name)
@@ -101,20 +88,19 @@ tt.min <- 30
                                       histology2 = ifelse (grepl('Adeno', histology), 'Adenocarcinoma', 'Squamous cell'))
 
         # Define X
-        X.factor  <-  c('sex', 'race2',  'histology2', 'treatment.year2' ) # X.factor  <-  c('sex', 'race',  'histology2') 
+        X.factor  <-  c('sex', 'race2',  'histology2', 'treatment.year2' ) 
         X.numeric  <-  c('age', 'size') 
         Xs  <-  c(sprintf('%s_z', X.numeric),  X.factor)
 
         Z.count  <- c('O2accessories', 'walking_aids' ,  'wheelchairs_accessories' , 'transportation_services', 'other_supplies',   'pressure_ulcer', 'ischemic_heart_disease', 'CHF', 'PVD', 'CVD',    'MILDLD','MSLD', 'DIAB_UC', 'DIAB_C',  'RD', 'mental_disorders', 'nervous_system',    'echo',  'Anticoags',  'smoking', 'o2',  'pneumonia_and_influenza','asthma', 'COPD','interstitial_lung')
         Z.count.unscaled = sprintf( '%s_pre_12months_count', Z.count )
-        # Zs  <-   sprintf( '%s_pre_12months_count_bool', Z.count )
          Zs  <-   sprintf( '%s_pre_12months_count', Z.count )
-        Q.count  <-  c( 'fall',  'other_injury', 'diverticular_disease', 'hernia',  'arthropathy','GU_sx')
-        Qs.unscaled = sprintf( '%s_pre_12months_count', Q.count )
+        # Q.count  <-  c( 'fall',  'other_injury', 'diverticular_disease', 'hernia',  'arthropathy','GU_sx')
+        # Qs.unscaled = sprintf( '%s_pre_12months_count', Q.count )
 
         A.final  <- A.final %>% mutate( 
 			     time.offset = pre.tx.months, 
-                                       across( all_of(c(Z.count.unscaled, Qs.unscaled)), function(x) (x >0), .names = "{.col}_bool" ),
+                                       across( all_of(c(Z.count.unscaled)), function(x) (x >0), .names = "{.col}_bool" ),
                                        # across( all_of(c(Z.count.unscaled)), function(x) quartile(x), .names = "{.col}_s" ),
                                        across( all_of(c(X.numeric)), scale_, .names = "{.col}_z" ))
 
@@ -125,7 +111,6 @@ tt.min <- 30
              # for (i in 1:length(Zs)) cat(i, label_list[[gsub('_count_s', '_count_bool', Zs)[i]]], '\n')
              # for (i in 1:length(Zs)) cat(sprintf('%s, ',label_list[ Zs[i]]))
               for (i in 1:length(Zs)) cat(sprintf('%s\n ', Zs[i]))
-            print('Q')
         }
 
         #################################
@@ -134,7 +119,7 @@ tt.min <- 30
         if (T) {
             Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/Resources/app/quarto/bin/tools")
             tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
-             f  <-  sprintf( 'tx ~ %s', paste( c(X.numeric, X.factor,'histology', gsub('_count', '_count_bool', c(Zs, Qs.unscaled))), collapse = "+"))
+             f  <-  sprintf( 'tx ~ %s', paste( c(X.numeric, X.factor,'histology', gsub('_count', '_count_bool', c(Zs))), collapse = "+"))
             # f  <-  sprintf( 'tx ~ %s', paste( c(X.numeric, X.factor, Zs, Qs.unscaled), collapse = "+"))
             labels(A.final)  <-  label_list
             tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
@@ -161,10 +146,6 @@ tt.min <- 30
             ) 
             mm  <-   tune.ahazpen( Surv(A.temp$outcome.time, A.temp$outcome.bool), design.mat )
             selected.columns[[outcome.name]]  <- get.selected.columns.ahaz(mm, s = 'lambda.min', colnames(design.mat), verbose=T, min.vars = 1)
-            # lambda.min.idx  <-  which.min(mm$tunem)
-            # mm$fit$beta[,lambda.min.idx]
-            # colnames(design.mat)
-            # plot(mm)
             print(sprintf( 'Included variables in stage 1 for %s: %s', outcome.name, paste( selected.columns[[outcome.name]], collapse = ', ')))
         }
 
@@ -194,7 +175,7 @@ tt.min <- 30
             m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
             hazard.differences.outcomes.adj[outcome.i,1:3]  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
             # Proximal
-	     mout  <-  two.step.loglinear.variable.selection(
+	     mout  <-  two.step(
 				data.mat = A.final, 
 				outcome.name = outcome.name,
 				Xs = Xs,
@@ -218,20 +199,3 @@ tt.min <- 30
         saveRDS(hazard.differences.outcomes.proximal, sprintf('data/%s.hazard.differences.outcomes.proximal.rds', analysis.name))
 }
 
-
- with(A.final %>% filter (tt < 30), table( tx, other.cause.mortality, useNA="ifany") )
- with(A.final %>% filter (tx == 'sublobar'), sum(other.cause.mortality == 'Death'))
- with(A.final %>% filter (tx == 'sbrt'), sum(other.cause.mortality == 'Death'))
- sum(A.final$other.cause.mortality == 'Death')
- # table( , useNA="ifany")
- # table( A.final$cause.specific.mortality, useNA="ifany")
-
-
-
-# filename.in  <-  sprintf('data/A.final09.%s.RDS', subset.name)
-# A.final9  <-  readRDS(filename.in) 
-
-# filename.in  <-  sprintf('data/A.final10.%s.RDS', subset.name)
-# A.final10  <-  readRDS(filename.in) 
-# A.final9 %>% count(cause.specific.mortality)
-# A.final10 %>% count(cause.specific.mortality)
