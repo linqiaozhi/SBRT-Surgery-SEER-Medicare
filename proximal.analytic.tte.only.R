@@ -1,5 +1,6 @@
 # library(pci2s)
-devtools::load_all('/Users/george/Research_Local/pci2s_gcl/pci2s')
+# devtools::load_all('/Users/george/Research_Local/pci2s_gcl/pci2s')
+devtools::load_all('/Users/george/Research_Local/pci2s/')
 library(glmnet)
 library(ahaz)
 library(arsenal)
@@ -44,16 +45,16 @@ subset.names  <- list(    'all.gte.65')
                      'death.noncopd.nonheart.nonstroke' = 'death.copd.heart.stroke' 
                     )
         outcome.names  <- names(W1s)
-        analysis.name  <- sprintf('v3.tte.%s', subset.name)
+tt.min <- 30
+        analysis.name  <- sprintf('v11.tte.ttmin30.%s', subset.name)
         print('====================')
         print(analysis.name)
         print('====================')
 
-tt.min <- 90
         ################################
         # Load data 
         ################################
-        filename.in  <-  sprintf('data/A.final05.%s.RDS', subset.name)
+        filename.in  <-  sprintf('data/A.final11.%s.RDS', subset.name)
         A.final  <-  readRDS(filename.in)  %>% 
             mutate(treatment.year = year(tx.date),
                    death.90.day = if_else ( ninety.day.mortality, death, as.Date(NA_character_)),
@@ -76,12 +77,20 @@ tt.min <- 90
                    pre.tx.days = pre.tx.months * 30.5,
                    post.tx.months = tt/30.5
             )
+        A.final %>%   
+            mutate(COD = ifelse( COD_TO_SITE_RECODE %in% cod.df$COD_TO_SITE_RECODE, COD_TO_SITE_RECODE, '50300')) %>%
+            group_by(COD) %>% summarise(  n = n(), p = n()/nrow(.) ) %>% arrange(desc(n)) %>%   left_join(cod.df, by = c('COD'='COD_TO_SITE_RECODE'))  %>% mutate (np = sprintf('%d (%.1f%%)', n ,p*100 ))%>% select( COD, Name,  np) %>% print(n =10)
+        A.final %>% summarise(sum(other.cause.mortality == 'Death'),  mean(other.cause.mortality == 'Death') *100) 
 
-        A.final %>% filter (other.cause.mortality == 'Death') %>% count(COD_TO_SITE_RECODE) %>% arrange(desc(n)) %>% print(n =Inf)
+        table( A.final$tx, useNA="ifany")
         # For the sensitivity analysis, some node positive patients are included
         A.final$tnm.n[is.na(A.final$tnm.n)]  <- 'X'
         A.final  <- A.final  %>% filter (tnm.n %in% c('0', '1', '2')) 
-         print(sprintf('%.3f%% of the sublobar patients are N+', 100*sum(A.final$tnm.n != 0 & A.final$tx == 'sublobar')/ sum(A.final$tx == 'sublobar')))
+        A.final  <- A.final %>% filter (tx == 'sbrt' |
+                                        ( tx == 'sublobar' & tnm.n == '0' ) | 
+                                        (tx == 'sublobar' & tnm.n != '0' & REGIONAL_NODES_EXAMINED_1988 != '00' ) )
+        print(sprintf('%.3f%% of the sublobar patients are N+', 100*sum(A.final$tnm.n != 0 & A.final$tx == 'sublobar')/ sum(A.final$tx == 'sublobar')))
+        print(table( A.final$REGIONAL_NODES_EXAMINED_1988, A.final$tnm.n, useNA="ifany"))
         A.final$tx  <-  droplevels(A.final$tx)
 
         # preprocessing
@@ -96,7 +105,7 @@ tt.min <- 90
         X.numeric  <-  c('age', 'size') 
         Xs  <-  c(sprintf('%s_z', X.numeric),  X.factor)
 
-           Z.count  <- c('O2accessories', 'walking_aids' ,  'wheelchairs_accessories' , 'transportation_services', 'other_supplies',   'pressure_ulcer', 'ischemic_heart_disease', 'CHF', 'PVD', 'CVD',    'MILDLD', 'DIAB_UC', 'DIAB_C',  'RD', 'mental_disorders', 'nervous_system',    'echo',  'Anticoags',  'smoking', 'o2',  'pneumonia_and_influenza','asthma', 'COPD','interstitial_lung')
+        Z.count  <- c('O2accessories', 'walking_aids' ,  'wheelchairs_accessories' , 'transportation_services', 'other_supplies',   'pressure_ulcer', 'ischemic_heart_disease', 'CHF', 'PVD', 'CVD',    'MILDLD','MSLD', 'DIAB_UC', 'DIAB_C',  'RD', 'mental_disorders', 'nervous_system',    'echo',  'Anticoags',  'smoking', 'o2',  'pneumonia_and_influenza','asthma', 'COPD','interstitial_lung')
         Z.count.unscaled = sprintf( '%s_pre_12months_count', Z.count )
         # Zs  <-   sprintf( '%s_pre_12months_count_bool', Z.count )
          Zs  <-   sprintf( '%s_pre_12months_count', Z.count )
@@ -105,7 +114,7 @@ tt.min <- 90
 
         A.final  <- A.final %>% mutate( 
 			     time.offset = pre.tx.months, 
-                                       across( all_of(c(Z.count.unscaled)), function(x) (x >0), .names = "{.col}_bool" ),
+                                       across( all_of(c(Z.count.unscaled, Qs.unscaled)), function(x) (x >0), .names = "{.col}_bool" ),
                                        # across( all_of(c(Z.count.unscaled)), function(x) quartile(x), .names = "{.col}_s" ),
                                        across( all_of(c(X.numeric)), scale_, .names = "{.col}_z" ))
 
@@ -113,8 +122,9 @@ tt.min <- 90
             print('X')
             for (i in 1:length(Xs)) cat(i, Xs[i], '\n')
             print('Z')
-            # for (i in 1:length(Zs)) cat(i, label_list[[gsub('_count_s', '_count_bool', Zs)[i]]], '\n')
-            for (i in 1:length(Zs)) cat(label_list[[gsub('_count_s', '_count_bool', Zs)[i]]], ',')
+             # for (i in 1:length(Zs)) cat(i, label_list[[gsub('_count_s', '_count_bool', Zs)[i]]], '\n')
+             # for (i in 1:length(Zs)) cat(sprintf('%s, ',label_list[ Zs[i]]))
+              for (i in 1:length(Zs)) cat(sprintf('%s\n ', Zs[i]))
             print('Q')
         }
 
@@ -124,10 +134,11 @@ tt.min <- 90
         if (T) {
             Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/Resources/app/quarto/bin/tools")
             tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
-            # f  <-  sprintf( 'tx ~ %s', paste( c(X.numeric, X.factor,'histology', gsub('_count_s', '_count_bool', Zs)), collapse = "+"))
-            f  <-  sprintf( 'tx ~ %s', paste( c(X.numeric, X.factor,'histology', Zs, Qs.unscaled), collapse = "+"))
+             f  <-  sprintf( 'tx ~ %s', paste( c(X.numeric, X.factor,'histology', gsub('_count', '_count_bool', c(Zs, Qs.unscaled))), collapse = "+"))
+            # f  <-  sprintf( 'tx ~ %s', paste( c(X.numeric, X.factor, Zs, Qs.unscaled), collapse = "+"))
             labels(A.final)  <-  label_list
             tt <- tableby(as.formula(f), data=A.final, control = tblcontrol)
+            # summary(tt) %>% write2html(sprintf('/Users/george/Research_Local/SEER-Medicare/tbls/table1_2_%s.bool.htm', analysis.name), quiet=T)
             summary(tt) %>% write2html(sprintf('/Users/george/Research_Local/SEER-Medicare/tbls/table1_2_%s.htm', analysis.name), quiet=T)
         }
 
@@ -196,7 +207,7 @@ tt.min <- 90
             mouts[[outcome.name]]  <-  mout
             est <- mout$ESTIMATE[1]
             se  <- mout$SE[1]
-            hazard.differences.outcomes.proximal[outcome.i,1:3]  <-  c(est, est - 1.96*se, est + 1.96*se)
+            hazard.differences.outcomes.proximal[outcome.i,1:3]  <-  c(est, est +qnorm(0.025)*se, est + qnorm(0.975)*se)
             print(hazard.differences.outcomes[outcome.i,1:3])
             print(hazard.differences.outcomes.adj[outcome.i,1:3])
             print(hazard.differences.outcomes.proximal[outcome.i,1:3])
@@ -207,3 +218,20 @@ tt.min <- 90
         saveRDS(hazard.differences.outcomes.proximal, sprintf('data/%s.hazard.differences.outcomes.proximal.rds', analysis.name))
 }
 
+
+ with(A.final %>% filter (tt < 30), table( tx, other.cause.mortality, useNA="ifany") )
+ with(A.final %>% filter (tx == 'sublobar'), sum(other.cause.mortality == 'Death'))
+ with(A.final %>% filter (tx == 'sbrt'), sum(other.cause.mortality == 'Death'))
+ sum(A.final$other.cause.mortality == 'Death')
+ # table( , useNA="ifany")
+ # table( A.final$cause.specific.mortality, useNA="ifany")
+
+
+
+# filename.in  <-  sprintf('data/A.final09.%s.RDS', subset.name)
+# A.final9  <-  readRDS(filename.in) 
+
+# filename.in  <-  sprintf('data/A.final10.%s.RDS', subset.name)
+# A.final10  <-  readRDS(filename.in) 
+# A.final9 %>% count(cause.specific.mortality)
+# A.final10 %>% count(cause.specific.mortality)
