@@ -14,17 +14,19 @@ library(ggplot2)
 source('utilities.R')
 source('two.step.variable.selection.R')
 
-subset.names  <- list(     'sens1', 'all.gte.65')
+subset.names  <- list(      'all.gte.65', 'sens1')
+nc_time_days = 90
+nboot = 1000
 for (subset.name in subset.names ){
         # Each analysis is separate, so set the seed for reproducibility. If
         # it's set outside the loop then the results can only be reproduced by
         # rerunning the entire script.
         set.seed(3)
-        outcome.names  <-  c( 'death', 'death.cause.specific', 'death.other.cause.gt90day',  'death.copd','death.heart',   'death.noncopd.nonheart')
+        # outcome.names  <-  c( 'death', 'death.cause.specific', 'death.other.cause.gt90day',  'death.copd','death.heart',   'death.noncopd.nonheart')
         W1s  <-  list(
-                    'death' = 'death.other.cause.gt90day', 
+                    # 'death' = 'death.other.cause.gt90day', 
                     'death.cause.specific' = 'death.other.cause.gt90day', 
-                    'death.other.cause.gt90day' = 'death.other.cause.gt90day', 
+                     'death.other.cause.gt90day' = 'death.other.cause.gt90day', 
                     'death.copd' = 'death.noncopd', 
                     'death.heart' = 'death.nonheart',
                     'death.stroke' = 'death.nonstroke',
@@ -32,8 +34,8 @@ for (subset.name in subset.names ){
                     )
         outcome.names  <- names(W1s)
         # After tt.min (days), W is a valid negative outcome
-        tt.min <- 30
-        analysis.name  <- sprintf('v11.tte.ttmin30.%s', subset.name)
+        tt.min <- -1
+        analysis.name  <- sprintf('v12.tte.nc_time_ss_%d_%s', nc_time_days, subset.name)
         print('====================')
         print(analysis.name)
         print('====================')
@@ -41,7 +43,7 @@ for (subset.name in subset.names ){
         ################################
         # Load data 
         ################################
-        filename.in  <-  sprintf('data/A.final11.%s.RDS', subset.name)
+        filename.in  <-  sprintf('data/A.final12.%s.RDS', subset.name)
         A.final  <-  readRDS(filename.in)  %>% 
             mutate(treatment.year = year(tx.date),
                    death.90.day = if_else ( ninety.day.mortality, death, as.Date(NA_character_)),
@@ -77,7 +79,7 @@ for (subset.name in subset.names ){
                                         ( tx == 'sublobar' & tnm.n == '0' ) | 
                                         (tx == 'sublobar' & tnm.n != '0' & REGIONAL_NODES_EXAMINED_1988 != '00' ) )
         print(sprintf('%.3f%% of the sublobar patients are N+', 100*sum(A.final$tnm.n != 0 & A.final$tx == 'sublobar')/ sum(A.final$tx == 'sublobar')))
-        print(table( A.final$REGIONAL_NODES_EXAMINED_1988, A.final$tnm.n, useNA="ifany"))
+        # print(table( A.final$REGIONAL_NODES_EXAMINED_1988, A.final$tnm.n, useNA="ifany"))
         A.final$tx  <-  droplevels(A.final$tx)
 
         # preprocessing
@@ -128,27 +130,6 @@ for (subset.name in subset.names ){
         }
 
 
-        #################################
-        # # variable selection for W1
-        ################################
-        exclude.from.stage1  <-  c('size_z', 'histology2')
-        X_  <-  model.matrix(as.formula(sprintf('~ %s', paste(Xs[!(Xs) %in% exclude.from.stage1], collapse = '+'))),  A.final)[,-1]
-        Z_  <- A.final[,Zs]
-        A_ = (A.final$tx == 'sbrt')*1.0
-        design.mat  <-  as.matrix(cbind(A_, X_, Z_))
-        selected.columns <- list()
-        for (W1i in 1:length(W1s)) {
-            outcome.name  <- W1s[[W1i]]
-            A.temp  <-  A.final %>% mutate( 
-                                           outcome.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt),
-                                           outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
-                                           outcome.time  = if_else (outcome.time == 0, 0.5, outcome.time)/ 365+ runif(dim(A.final)[1] ,0,1)*1e-8
-            ) 
-            mm  <-   tune.ahazpen( Surv(A.temp$outcome.time, A.temp$outcome.bool), design.mat )
-            selected.columns[[outcome.name]]  <- get.selected.columns.ahaz(mm, s = 'lambda.min', colnames(design.mat), verbose=T, min.vars = 1)
-            print(sprintf( 'Included variables in stage 1 for %s: %s', outcome.name, paste( selected.columns[[outcome.name]], collapse = ', ')))
-        }
-
         ################################
         # Obtain estimates using the selected variables 
         ################################
@@ -157,6 +138,7 @@ for (subset.name in subset.names ){
         hazard.differences.outcomes.adj  <-  make.odds.ratio.df ( outcome.names) 
         hazard.differences.outcomes.proximal  <-  make.odds.ratio.df ( outcome.names) 
         mouts  <-  list()
+        outcome.i  <-  2
         for (outcome.i in 1:length(outcome.names)){ 
             outcome.name  <-  outcome.names[outcome.i]
             W1  <- W1s[[outcome.i]]
@@ -166,6 +148,32 @@ for (subset.name in subset.names ){
                                            outcome.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
                                            outcome.time  = if_else (outcome.time == 0, 0.5, outcome.time)/ 365+ runif(dim(A.final)[1] ,0,1)*1e-8
             ) 
+            A.temp  <-  A.temp %>% mutate( 
+                                          W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date, units = "days" ), tt),
+                                          W1.time  = if_else (W1.time == 0, 0.5, W1.time)/365,
+                                          W1.bool = ifelse( nna(!!rlang::sym(W1)), T, F),
+                                          Y.time  = if_else (nna(!!rlang::sym(outcome.name)), as.numeric( !!rlang::sym(outcome.name) - tx.date, units = "days" ), tt)/365,
+                                          Y.bool = ifelse( nna(!!rlang::sym(outcome.name)), T, F),
+            )
+            A_ = (A.temp$tx == 'sbrt')*1.0
+            X_  <-  model.matrix(as.formula(sprintf('~ %s', paste(Xs, collapse = '+'))),  A.temp)[,-1]
+            W_ <- as.matrix( A.temp$W1.time)
+            D2_  <- A.temp$W1.bool*1.0
+            Z_  <- A.temp[,Zs]
+            N_  <- dim(A.temp)[1]
+            Y_ = A.temp$Y.time
+            D_ = A.temp$Y.bool*1.0
+            A.temp <- A.temp %>% mutate(
+                                        cause = case_when (
+                                                           nna(!!rlang::sym(outcome.name))~ 0, # primary event
+                                                           nna(!!rlang::sym(W1))~ 1,
+                                                           T ~ -1
+                                                           )
+                                        )
+
+
+            A.temp %>% count(cause, cause.specific.mortality, other.cause.mortality, )
+            A.temp %>% count(cause, cause.specific.mortality, nna(death.copd), nna(death.noncopd) )
             # Raw
             f  <- as.formula('Surv(outcome.time, outcome.bool) ~ const(tx)')
             m  <-  aalen( f ,  data = A.temp, robust = 0)
@@ -175,20 +183,15 @@ for (subset.name in subset.names ){
             m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
             hazard.differences.outcomes.adj[outcome.i,1:3]  <-  c( coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
             # Proximal
-	     mout  <-  two.step(
-				data.mat = A.final, 
-				outcome.name = outcome.name,
-				Xs = Xs,
-				Zs = Zs,
-                                W1.selected.variables = selected.columns[[W1]],
-				Y.count.bool =	F,
-				verbose=T,
-				W1 = W1
-)
-            mouts[[outcome.name]]  <-  mout
-            est <- mout$ESTIMATE[1]
-            se  <- mout$SE[1]
-            hazard.differences.outcomes.proximal[outcome.i,1:3]  <-  c(est, est +qnorm(0.025)*se, est + qnorm(0.975)*se)
+            if (outcome.name != W1) {
+                print(system.time(mout  <- p2sls.cprisk.nc  (times = Y_, cause = A.temp$cause, A = A_,  X = X_, Z = Z_, nc_time = nc_time_days/365,  bootstrap = T, nboot = nboot, conf.level = 0.95) ))
+                mouts[[outcome.name]]  <-  mout
+                est <- mout$beta_a
+                hazard.differences.outcomes.proximal[outcome.i,1:3]  <-  c(est, mout$beta_a_ci[1], mout$beta_a_ci[2])
+            }else {
+                hazard.differences.outcomes.proximal[outcome.i,1:3]  <-  c(NULL, NULL, NULL)
+
+            }
             print(hazard.differences.outcomes[outcome.i,1:3])
             print(hazard.differences.outcomes.adj[outcome.i,1:3])
             print(hazard.differences.outcomes.proximal[outcome.i,1:3])
