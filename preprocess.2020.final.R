@@ -273,6 +273,7 @@ patient.tx  <- seer.tx %>%
                )
 
 
+gc()
 ################################
 # SECTION III MBSF processing
 ################################
@@ -304,7 +305,7 @@ if ( ! file.exists (fn.RDS) ) {
 # FFS (ffs.months.counter)
 mbsf.wide  <- mbsf  %>%  select( PATIENT_ID,BENE_ENROLLMT_REF_YR,  MDCR_STATUS_CODE_01:MDCR_STATUS_CODE_12,HMO_IND_01:HMO_IND_12)  %>% rename_with(
                                      .fn = ~ gsub("MDCR_STATUS_CODE", "MDCRSTATUSCODE", .x),
-                                     .cols = starts_with("MDCR_STATUS_CODE")
+                                     .cols = starts_with("DCR_STATUS_CODE")
                                      ) %>%
                             rename_with(
                                         .fn = ~ gsub("HMO_IND", "HMOIND", .x),
@@ -314,19 +315,26 @@ sum_reset   <- function(x) accumulate( x, ~(.y!=0)*(.y+.x))
 year.month  <-  function(x) {
     sprintf('%d-%d', year(x), month(x) )
 }
+
+
+
+# colnames(mbsf.wide)
+#  mbsf.wide %>% select( -c(PATIENT_ID, BENE_ENROLLMT_REF_YR), -contains('MDCR')) 
+#  mbsf.wide %>% select( -) 
+# fofo %>% print(width=Inf)
+# fofo  <-  mbsf.wide[1:100,] %>% pivot_longer(cols = c(-c(PATIENT_ID, BENE_ENROLLMT_REF_YR), -contains('MDCR')), names_to = c(".value", "month" ), names_sep="_" )
+# fofo  <-  mbsf.wide[1:100,] %>% select(-contains('MDCR') ) %>%  pivot_longer(cols = contains('HMO'), names_to = c(".value", "month" ), names_sep="_"  )
+# fofo %>% print(width=Inf)
+
 mbsf.long.ffs  <- mbsf.wide %>% 
-    pivot_longer(cols = -c(PATIENT_ID, BENE_ENROLLMT_REF_YR), names_to = c(".value", "month" ), names_sep="_" ) %>%
+    select(-contains('MDCR') ) %>%  pivot_longer(cols = contains('HMO'), names_to = c(".value", "month" ), names_sep="_"  ) %>% 
+    # pivot_longer(cols = -c(PATIENT_ID, BENE_ENROLLMT_REF_YR), names_to = c(".value", "month" ), names_sep="_" ) %>%
     mutate(year = BENE_ENROLLMT_REF_YR,
            # Last date of the month. Will use this later to count the number of months where tx.date is <= date for FFS months
            date = ceiling_date(ymd(sprintf('%d-%s-01', year, month)), 'month') -1 ,
            ym = year.month(date),
            ffs.month = HMOIND %in% c(0,4) ) 
 mbsf.long.ffs.valid  <-  mbsf.long.ffs   %>%  filter (ffs.month)
-
-    
-
-
-
 
     
 mbsf.long.ffs.grouped  <- mbsf.long.ffs %>% 
@@ -361,6 +369,7 @@ patient.mbsf <- mbsf %>% mutate(
                         right_join(patient.mbsf.months.counter) %>% 
                         right_join(patient.mbsf.total.ffs)
 
+gc()
 ################################
 # Section IV:  Identify diagnoses 
 ################################
@@ -630,13 +639,21 @@ A  <-  A %>%
                                        marital.status ==2 ~ 'Married',
                                        marital.status %>% between( 3,6) ~ 'Other',
                                        T ~ 'Unknown'),
-           cause.specific.mortality = case_when ( 
-                                                 cause.specific.mortality == 0 ~ 'Alive or other death',
-                                                 cause.specific.mortality ==1 ~ 'Death',
-                                                 T ~ 'Unknown' ),
+           # cause.specific.mortality = case_when ( 
+           #                                       cause.specific.mortality == 0 ~ 'Alive or other death',
+           #                                       cause.specific.mortality ==1 ~ 'Death',
+           #                                       T ~ 'Unknown' ),
+           lc.specific.mortality = if_else( COD_TO_SITE_RECODE == '22030', 'Death', 'Alive or other death'),
+           lc.specific.mortality = case_when ( 
+                                              cause.specific.mortality == 1 &  COD_TO_SITE_RECODE == '22030'~ 'Death',
+                                              cause.specific.mortality == 1 &  COD_TO_SITE_RECODE != '22030'~ 'Alive or other death',
+                                              cause.specific.mortality == 0 ~ 'Alive or other death',
+                                              T ~ 'Unknown' ),
            other.cause.mortality = case_when ( 
-                                              other.cause.mortality == 0 ~ 'Alive or cancer death',
-                                              other.cause.mortality ==1 ~ 'Death',
+                                              cause.specific.mortality == 1 &  COD_TO_SITE_RECODE == '22030'~ 'Alive or cancer death',
+                                              cause.specific.mortality == 1 &  COD_TO_SITE_RECODE != '22030'~ 'Death',
+                                              cause.specific.mortality == 0 & other.cause.mortality == 0 ~ 'Alive or cancer death',
+                                              cause.specific.mortality == 0 &other.cause.mortality ==1 ~ 'Death',
                                               T ~ 'Unknown' ),
            histology.code = sprintf( '%s/%s',  HISTOLOGIC_TYPE_ICD_O_3, BEHAVIOR_CODE_ICD_O_3 ),
            microscopically_confirmed = DIAGNOSTIC_CONFIRMATION %in% c(1,2,3,4),
@@ -718,8 +735,8 @@ histology =  case_when(
                                   (size >=7 & size<100) | tnm.t=='4'  ~ 'T4',
                                   T ~ NA_character_),
            dx.date =  ymd(ifelse ( YEAR_OF_DIAGNOSIS != "" & MONTH_OF_DIAGNOSIS != "" , sprintf('%s%s15', YEAR_OF_DIAGNOSIS, MONTH_OF_DIAGNOSIS), NA_character_ ) )  ,
-           tx.date.seer =  ymd(ifelse ( YEAR_THERAPY_STARTED != "" & MONTH_THERAPY_STARTED != "" , sprintf('%s%s15', YEAR_OF_DIAGNOSIS, MONTH_OF_DIAGNOSIS), NA_character_ ) )  ,
-           tx.month.year.seer =  month.year(tx.date.seer)  ,
+           # tx.date.seer =  ymd(ifelse ( YEAR_THERAPY_STARTED != "" & MONTH_THERAPY_STARTED != "" , sprintf('%s%s15', YEAR_OF_DIAGNOSIS, MONTH_OF_DIAGNOSIS), NA_character_ ) )  ,
+           # tx.month.year.seer =  month.year(tx.date.seer)  ,
                        dx.to.tx  =  as.numeric( tx.date - dx.date, units = 'days'),
                        death.date.seer = 
                            ymd( ifelse ( ""!=(SEER_DATEOFDEATH_YEAR) & ""!=(SEER_DATEOFDEATH_MONTH) , sprintf('%s%s15', SEER_DATEOFDEATH_YEAR, SEER_DATEOFDEATH_MONTH), NA_character_ ) )  ,
@@ -727,31 +744,40 @@ histology =  case_when(
                        thirty.day.mortality = ifelse ( nna(death.date.mbsf) & tt < 30, T, F ) ,
                        ninety.day.mortality = ifelse ( nna(death.date.mbsf) & tt < 90, T, F ) ,
                        death = death.date.mbsf, 
-                       valid.death.indicator = is.na (death.date.seer) == is.na(death.date.mbsf) )
+                       valid.death.indicator = is.na (death.date.seer) == is.na(death.date.mbsf) & lc.specific.mortality != 'Unknown' & other.cause.mortality != 'Unkown')
+
+    # A %>% count (lc.specific.mortality,other.cause.mortality, COD_TO_SITE_RECODE) %>% print (n=Inf)
+    # A %>% count (other.cause.mortality, COD_TO_SITE_RECODE) %>% print (n=Inf)
 ################################
 # Section IX  Exclusion
 ################################
 # A large number of SEER patients underwent surgery based on the seer.surgery variable which are not included, as they were note enrolled in Medicare at the time of treatment. Recall that SEER includes non Medicare patietns as well. 
 incex  <-  function ( A.frame ) {
-    print(sprintf('%d (SR: %d, SBRT: %d)', nrow(A.frame), sum(A.frame$tx == 'sublobar' & A.frame$seer.surgery == 'sublobar' ,na.rm = T), sum(A.frame$tx == 'sbrt' & A.frame$seer.surgery == 'no_surgery', na.rm =T)))
+    # print(sprintf('%d (SR: %d, SBRT: %d)', nrow(A.frame), sum(A.frame$tx == 'sublobar' & A.frame$seer.surgery == 'sublobar' ,na.rm = T), sum(A.frame$tx == 'sbrt' & A.frame$seer.surgery == 'no_surgery', na.rm =T)))
+     # print(sprintf('%d (SR: %d, SBRT: %d)', nrow(A.frame), sum(A.frame$tx == 'sublobar' & A.frame$seer.surgery == 'sublobar' ,na.rm = T), sum(A.frame$tx == 'sbrt' & A.frame$seer.surgery == 'no_surgery', na.rm =T)))
+     print(sprintf('%d (SR: %d, SBRT: %d)', nrow(A.frame), sum(A.frame$tx == 'sublobar' ,na.rm = T), sum(A.frame$tx == 'sbrt' , na.rm =T)))
 }
 print(nrow(A))
 A.final  <- A %>% filter ( histology !="Small cell" & histology != 'Other' & histology != 'Carcinoid' & histology != 'Adenosquamous' & histology != 'Large cell' & histology != 'Non-small cell carcinoma' )
 incex(A.final)
-table( A.final$tx, useNA="ifany")
 A.final  <-  A.final %>% filter ( (t_stage_8=="T1a" | t_stage_8=="T1b" | t_stage_8=="T1c") & tnm.n=='0'& tnm.m=='0')
-incex(A.final)
 A.final <- A.final %>% filter( RX_SUMM_SYSTEMIC_SURG_SEQ == "0")
 incex(A.final)
 A.final  <-  A.final %>% filter (age >= 65  & age < 90)
 incex(A.final)
-table( A.final$ffs.months.counter, useNA="ifany")
 A.final  <-  A.final %>% filter ( ffs.months.counter >= 12 )
 incex(A.final)
 A.final <- A.final %>% filter ( tx %in% c( 'sbrt', 'sublobar') )
 A.final$tx  <- droplevels(A.final$tx)
+incex(A.final)
+A.final  <- A.final %>% filter (tx == 'sublobar' | 
+                                ( tx == 'sbrt' &  
+                                    ( is.na(lobar.date)   |  (  lobar.date  >  sbrt.date ) ) & 
+                                    ( is.na(sublobar.date)   |  (  sublobar.date  >  sbrt.date ) ) 
+                                )
+                            )
 # A.final %>% group_by(tx,year(tx.date)) %>% summarise(n=n()) %>% print (n=Inf)
-# incex(A.final)
+incex(A.final)
 A.final  <-  A.final %>% filter (dx.to.tx <= 135 & dx.to.tx >= -16) # The diagnosis date is chosen to be the 15th of each month, as the date itself is not available
 incex(A.final)
 A.final  <-  A.final %>% filter (valid.death.indicator )
@@ -760,12 +786,11 @@ A.final  <-  A.final %>% filter (valid.pet.scan)
 incex(A.final)
 A.final  <-  A.final %>% filter (microscopically_confirmed)
 incex(A.final)
-A.final  %>%  write_rds( 'data/A.final05.all.gte.65.RDS' )
-table( A.final$tx, useNA="ifany")
+A.final  %>%  write_rds( 'data/A.final20.all.gte.65.RDS' )
 
-A %>% group_by(year(tx.date), tx) %>% summarise(n=n()) %>% print (n=Inf)
-A.final %>% group_by(year(tx.date), tx) %>% summarise(n=n()) %>% print (n=Inf)
-A.final %>% count(tx)
+A.final %>% filter (tx == 'sublobar' ) %>% count (seer.surgery)
+A.final %>% filter (tx == 'sublobar') %>% count(RX_SUMM_SURG_PRIM_SITE_1998)
+
 
 A.final %>% filter (nna(cause.specific.mortality)) %>% count(  COD_TO_SITE_RECODE) %>% arrange(-n)
 
@@ -783,14 +808,16 @@ A.sens1  <-  A.sens1 %>% filter (( tx == 'sbrt'  & ( (t_stage_8=="T1a" | t_stage
 A.sens1$tnm.n[is.na(A.sens1$tnm.n)]  <- 'X'
  incex(A.sens1)
 A.sens1 <- A.sens1 %>% filter( tx == 'sublobar' | (tx == 'sbrt' & RX_SUMM_SYSTEMIC_SURG_SEQ == "0"))
+A.sens1  <- A.sens1 %>% filter (tx == 'sublobar' | 
+                                ( tx == 'sbrt' &  
+                                    ( is.na(lobar.date)   |  (  lobar.date  >  sbrt.date ) ) & 
+                                    ( is.na(sublobar.date)   |  (  sublobar.date  >  sbrt.date ) ) 
+                                )
+                            )
 incex(A.sens1)
 A.sens1  <-  A.sens1 %>% filter (age >= 65  & age < 90)
 incex(A.sens1)
 A.sens1  <-  A.sens1 %>% filter ( ffs.months.counter >= 12)
-incex(A.sens1)
-A.final <- A.final %>% filter ( tx %in% c( 'sbrt', 'sublobar') )
-# A.sens1 <- A.sens1 %>% filter ( (tx == 'sbrt'& seer.surgery == 'no_surgery')|
-#                                 (tx == 'sublobar' & seer.surgery == 'sublobar'))
 incex(A.sens1)
 A.sens1  <-  A.sens1 %>% filter (dx.to.tx <= 135 & dx.to.tx >= -16) # The diagnosis date is chosen to be the 15th of each month, as the date itself is not available
 A.sens1  <-  A.sens1 %>% filter (valid.death.indicator )
@@ -799,6 +826,11 @@ A.sens1  <-  A.sens1 %>% filter (valid.pet.scan)
 incex(A.sens1)
 A.sens1  <-  A.sens1 %>% filter (microscopically_confirmed)
 incex(A.sens1)
-A.sens1  %>%  write_rds( 'data/A.final05.sens1.RDS' )
+A.sens1  %>%  write_rds( 'data/A.final20.sens1.RDS' )
 table( A.sens1$tnm.n, useNA="ifany")
 
+
+table( A.final$cause.specific.mortality, useNA="ifany")
+
+dx.icd['o2']
+procs$O2accessories
