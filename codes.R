@@ -80,6 +80,16 @@ valid.dxs  <- c( expand_range('1622','1629'),
                 expand_range(as.icd10('C34'), as.icd10('C349')),
                 expand_range(as.icd10('R91'), as.icd10('R918')))
 
+sink('tbls/valid.dxs.txt'); 
+for (i in 1:length(valid.dxs)) {
+    if (i<10)
+    cat( sprintf('%s|%s\n', valid.dxs[i], explain_code(valid.dxs[i])))
+    else
+    cat( sprintf('%s|%s\n', valid.dxs[i], explain_code(as.icd10(as.character(valid.dxs[i])))))
+}
+sink()
+
+
 sbrt.icds  <-  c(
                  # ICD9 PCS, https://www.ahd.com/reference/ICD9desc_proc_CMS2015.pdf
                  '9230',  # Stereo radiosurgery NOS 
@@ -102,6 +112,7 @@ sbrt.cpts  <-  c('77373', # STEREOTACTIC BODY RADIATION THERAPY, TREATMENT DELIV
 
                 'G0340'#IMAGE-GUIDED ROBOTIC LINEAR ACCELERATOR-BASED STEREOTACTIC RADIOSURGERY, DELIVERY INCLUDING COLLIMATOR CHANGES AND CUSTOM PLUGGING, FRACTIONATED TREATMENT, ALL LESIONS, PER SESSION, SECOND THROUGH FIFTH SESSIONS, MAXIMUM FIVE SESSIONS PER COURSE OF TREATMENT
 )
+# 0082T and 61793 are both deleted, before study time, so not included 
 
 ebus.cpts  <- c('31620', '31652', '31653', '31654')
 # https://www.bostonscientific.com/content/dam/bostonscientific/Reimbursement/Pulmonary/pdf/EBUS_Coding_and_Payment_Quick_Reference.pdf
@@ -421,11 +432,13 @@ dx.icd.codes[dx.icd.codes %in%  dx.icd.codes[ duplicated(dx.icd.codes)]]
 pet.scan.cpts <-c('78810', '78811', '78812', '78813', '78814', '78815', '78816','G0125', 'G0126', 'G0210','G0211', 'G0212', 'G0234', 'G0235')
 
 
+#TODO: Fix O2accessoreis
 procs  <- list (
             'hospital_beds_and_supplies' = expand_range_procs ( 'E0250', 'E0373', CPT_Codes),
             'wheelchairs_accessories' = c ( expand_range_procs ( 'K0001', 'K0462', CPT_Codes), 'K0669'),
             'walking_aids' = c ( expand_range_procs ( 'E0100', 'E0159', CPT_Codes)),
-            'O2accessories' = c ( expand_range_procs ( 'E1353', 'E1406', CPT_Codes)),
+            # 'O2accessories' = c ( expand_range_procs ( 'E1353', 'E1406', CPT_Codes),  expand_range_procs ( 'E0424', 'E0486', CPT_Codes)),
+             'O2accessories' = c ('E0424', 'E0425', 'E0430', 'E0431', 'E0433', 'E0434', 'E0435', 'E0439', 'E0440', 'E0441', 'E0442', 'E0443', 'E0444', 'E0446', 'K0472', 'K0738', 'K0741', 'S8120', 'S8121', 'E1390', 'E1391', 'E1392', 'E1352', 'E1353', 'E1354', 'E1356', 'E1357', 'E1358', 'K0741', 'E1406'),
             'other_supplies' =  expand_range_procs ( 'A4244', 'A4290', CPT_Codes),
             'diabetic_footwear' =  expand_range_procs ( 'A5500', 'A5513', CPT_Codes),
             'transportation_services' =  expand_range_procs ( 'A0021', 'A0999', CPT_Codes),
