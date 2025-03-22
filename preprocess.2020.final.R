@@ -639,13 +639,21 @@ A  <-  A %>%
                                        marital.status ==2 ~ 'Married',
                                        marital.status %>% between( 3,6) ~ 'Other',
                                        T ~ 'Unknown'),
-           cause.specific.mortality = case_when ( 
-                                                 cause.specific.mortality == 0 ~ 'Alive or other death',
-                                                 cause.specific.mortality ==1 ~ 'Death',
-                                                 T ~ 'Unknown' ),
+           # cause.specific.mortality = case_when ( 
+           #                                       cause.specific.mortality == 0 ~ 'Alive or other death',
+           #                                       cause.specific.mortality ==1 ~ 'Death',
+           #                                       T ~ 'Unknown' ),
+           lc.specific.mortality = if_else( COD_TO_SITE_RECODE == '22030', 'Death', 'Alive or other death'),
+           lc.specific.mortality = case_when ( 
+                                              cause.specific.mortality == 1 &  COD_TO_SITE_RECODE == '22030'~ 'Death',
+                                              cause.specific.mortality == 1 &  COD_TO_SITE_RECODE != '22030'~ 'Alive or other death',
+                                              cause.specific.mortality == 0 ~ 'Alive or other death',
+                                              T ~ 'Unknown' ),
            other.cause.mortality = case_when ( 
-                                              other.cause.mortality == 0 ~ 'Alive or cancer death',
-                                              other.cause.mortality ==1 ~ 'Death',
+                                              cause.specific.mortality == 1 &  COD_TO_SITE_RECODE == '22030'~ 'Alive or cancer death',
+                                              cause.specific.mortality == 1 &  COD_TO_SITE_RECODE != '22030'~ 'Death',
+                                              cause.specific.mortality == 0 & other.cause.mortality == 0 ~ 'Alive or cancer death',
+                                              cause.specific.mortality == 0 &other.cause.mortality ==1 ~ 'Death',
                                               T ~ 'Unknown' ),
            histology.code = sprintf( '%s/%s',  HISTOLOGIC_TYPE_ICD_O_3, BEHAVIOR_CODE_ICD_O_3 ),
            microscopically_confirmed = DIAGNOSTIC_CONFIRMATION %in% c(1,2,3,4),
@@ -736,8 +744,10 @@ histology =  case_when(
                        thirty.day.mortality = ifelse ( nna(death.date.mbsf) & tt < 30, T, F ) ,
                        ninety.day.mortality = ifelse ( nna(death.date.mbsf) & tt < 90, T, F ) ,
                        death = death.date.mbsf, 
-                       valid.death.indicator = is.na (death.date.seer) == is.na(death.date.mbsf) & cause.specific.mortality != 'Unknown' & other.cause.mortality != 'Unkown')
+                       valid.death.indicator = is.na (death.date.seer) == is.na(death.date.mbsf) & lc.specific.mortality != 'Unknown' & other.cause.mortality != 'Unkown')
 
+    # A %>% count (lc.specific.mortality,other.cause.mortality, COD_TO_SITE_RECODE) %>% print (n=Inf)
+    # A %>% count (other.cause.mortality, COD_TO_SITE_RECODE) %>% print (n=Inf)
 ################################
 # Section IX  Exclusion
 ################################
@@ -776,7 +786,7 @@ A.final  <-  A.final %>% filter (valid.pet.scan)
 incex(A.final)
 A.final  <-  A.final %>% filter (microscopically_confirmed)
 incex(A.final)
-A.final  %>%  write_rds( 'data/A.final13.all.gte.65.RDS' )
+A.final  %>%  write_rds( 'data/A.final20.all.gte.65.RDS' )
 
 A.final %>% filter (tx == 'sublobar' ) %>% count (seer.surgery)
 A.final %>% filter (tx == 'sublobar') %>% count(RX_SUMM_SURG_PRIM_SITE_1998)
@@ -816,7 +826,7 @@ A.sens1  <-  A.sens1 %>% filter (valid.pet.scan)
 incex(A.sens1)
 A.sens1  <-  A.sens1 %>% filter (microscopically_confirmed)
 incex(A.sens1)
-A.sens1  %>%  write_rds( 'data/A.final13.sens1.RDS' )
+A.sens1  %>%  write_rds( 'data/A.final20.sens1.RDS' )
 table( A.sens1$tnm.n, useNA="ifany")
 
 
