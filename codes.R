@@ -399,6 +399,10 @@ dx.icd  <- c( dx.icd,
         'icd9' = setdiff( expand_range('290', '294'), dx.icd[['dementia']]$icd9) ,
         'icd10' = setdiff(expand_range('F01','F99'), dx.icd[['dementia']]$icd10)
      ),
+        'LD' = list(
+                    'icd9'      = c( dx.icd$MSLD$icd9, dx.icd$MILDLD$icd9),
+                    'icd10'     = c( dx.icd$MSLD$icd10, dx.icd$MILDLD$icd10)
+                    ),
      'nervous_system' = list(
         'icd9' = setdiff( expand_range( '320', '359'), c(dx.icd[['PARA']]$icd9,  dx.icd[['CVD']]$icd9,  dx.icd[['dementia']]$icd9  )),
         'icd10' =setdiff( expand_range('G00', 'G99'),c(  dx.icd[['PARA']]$icd10, dx.icd[['CVD']]$icd10, dx.icd[['dementia']]$icd10 )) ),
@@ -432,12 +436,12 @@ dx.icd.codes[dx.icd.codes %in%  dx.icd.codes[ duplicated(dx.icd.codes)]]
 pet.scan.cpts <-c('78810', '78811', '78812', '78813', '78814', '78815', '78816','G0125', 'G0126', 'G0210','G0211', 'G0212', 'G0234', 'G0235')
 
 
-#TODO: Fix O2accessoreis
 procs  <- list (
             'hospital_beds_and_supplies' = expand_range_procs ( 'E0250', 'E0373', CPT_Codes),
             'wheelchairs_accessories' = c ( expand_range_procs ( 'K0001', 'K0462', CPT_Codes), 'K0669'),
             'walking_aids' = c ( expand_range_procs ( 'E0100', 'E0159', CPT_Codes)),
-            # 'O2accessories' = c ( expand_range_procs ( 'E1353', 'E1406', CPT_Codes),  expand_range_procs ( 'E0424', 'E0486', CPT_Codes)),
+            # Mobility_aids is the combination of the prior two
+            'mobility_aids' = c ( expand_range_procs ( 'K0001', 'K0462', CPT_Codes), 'K0669', expand_range_procs ( 'E0100', 'E0159', CPT_Codes)),
              'O2accessories' = c ('E0424', 'E0425', 'E0430', 'E0431', 'E0433', 'E0434', 'E0435', 'E0439', 'E0440', 'E0441', 'E0442', 'E0443', 'E0444', 'E0446', 'K0472', 'K0738', 'K0741', 'S8120', 'S8121', 'E1390', 'E1391', 'E1392', 'E1352', 'E1353', 'E1354', 'E1356', 'E1357', 'E1358', 'K0741', 'E1406'),
             'other_supplies' =  expand_range_procs ( 'A4244', 'A4290', CPT_Codes),
             'diabetic_footwear' =  expand_range_procs ( 'A5500', 'A5513', CPT_Codes),
