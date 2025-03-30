@@ -786,7 +786,7 @@ A.final  <-  A.final %>% filter (valid.pet.scan)
 incex(A.final)
 A.final  <-  A.final %>% filter (microscopically_confirmed)
 incex(A.final)
-A.final  %>%  write_rds( 'data/A.final31.all.gte.65.RDS' )
+A.final  %>%  write_rds( 'data/A.final33.all.gte.65.RDS' )
 
 A.final %>% filter (tx == 'sublobar' ) %>% count (seer.surgery)
 A.final %>% filter (tx == 'sublobar') %>% count(RX_SUMM_SURG_PRIM_SITE_1998)
@@ -826,11 +826,6 @@ A.sens1  <-  A.sens1 %>% filter (valid.pet.scan)
 incex(A.sens1)
 A.sens1  <-  A.sens1 %>% filter (microscopically_confirmed)
 incex(A.sens1)
-A.sens1  %>%  write_rds( 'data/A.final31.sens1.RDS' )
+A.sens1  %>%  write_rds( 'data/A.final33.sens1.RDS' )
 table( A.sens1$tnm.n, useNA="ifany")
 
-
-table( A.final$cause.specific.mortality, useNA="ifany")
-
-dx.icd['o2']
-procs$O2accessories

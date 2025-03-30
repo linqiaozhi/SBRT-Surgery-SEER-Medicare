@@ -41,7 +41,7 @@ label_list  <-  list(
                      PVD_pre_12months_count_bool = 'Peripheral vascular disease',
                      CVD_pre_12months_count_bool = 'Cerebrovascular disease',
                      dementia_pre_12months_count_bool = 'Dementia',
-                     COPD_pre_12months_count_bool = 'Chronic obstructive pulmonary disease',
+                     COPD_pre_12months_count_bool = 'Other chronic pulmonary disease, including COPD',
                      asthma_pre_12months_count_bool = 'Asthma',
                      interstitial_lung_pre_12months_count_bool = 'Interstitial lung disease',
                      other_lung_pre_12months_count_bool = 'Other lung disease',

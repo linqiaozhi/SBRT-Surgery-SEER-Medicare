@@ -74,7 +74,6 @@ expand.each.code  <-  function(code.list, icd9or10 = 'undefined') {
 }
 
 
-#TODO: Add in nodule here for the SBRT patients...
 valid.dxs  <- c( expand_range('1622','1629'), 
                 expand_range('7931', '79319'),
                 expand_range(as.icd10('C34'), as.icd10('C349')),
@@ -275,9 +274,6 @@ dx.icd   <- list (
      'acute_bronchitis' = list(
         'icd9'=c('4660', '4661'),
         'icd10' =  sprintf('J20%d',0:9)),
-     'interstitial_lung' = list(
-        'icd9' = c( expand_range('5163', '51669'), '515'),
-        'icd10' =  expand_range( 'J84', 'J849')),
      'oral' = list(
         'icd9' = expand_range('520','5299'),
         'icd10' =  expand_range('K00', 'K149')),
@@ -356,9 +352,12 @@ dx.icd   <- list (
      'asthma' = list( 
         'icd9' = expand_range('493', '49392'),
         'icd10' = expand_range('J45', 'J45998')),
+     'interstitial_lung' = list(
+        'icd9' = c( expand_range('5163', '51669'), '515'),
+        'icd10' =  expand_range( 'J84', 'J849')),
      'COPD' = list(
-        'icd9' = expand.each.code(c('4168','4169','490','491','492','493','494','495','496','500','501','502','503','504','505','5064','5081','5088')),
-        'icd10' =  expand.each.code(c('J40','J41','J42','J43','J44','J45','J46','J47', 'J60','J61','J62','J63','J64','J65','J66','J67', 'I278','I279','J684','J701','J703'))),
+        'icd9' = expand.each.code(c('4168','4169','490','491','492','494','495','496','500','501','502','503','504','505','5064','5081','5088')),
+        'icd10' =  expand.each.code(c('J40','J41','J42','J43','J44','J46','J47', 'J60','J61','J62','J63','J64','J65','J66','J67', 'I278','I279','J684','J701','J703'))),
      'PUD' = list(
         'icd9' = expand.each.code(c('531','532','533','534')),
         'icd10' =  expand.each.code(c('K25','K26','K27','K28'))),
@@ -454,27 +453,30 @@ procs  <- list (
 
 
 
+to.print  <-  c('O2accessories', 'mobility_aids' , 'transportation_services', 'other_supplies',   'pressure_ulcer', 'ischemic_heart_disease', 'CHF', 'PVD', 'CVD',    'LD', 'DIAB_UC', 'DIAB_C',  'RD', 'mental_disorders', 'nervous_system',    'echo',  'Anticoags',  'smoking', 'o2',  'pneumonia_and_influenza','asthma', 'COPD','interstitial_lung')
 sink('tbls/dx.icd.txt'); 
 for (namei in (names(dx.icd))) { 
-    cat(sprintf('%s\n', namei))
-    icd9.codes  <-  dx.icd[[namei]][['icd9']]
-    cat(sprintf('%s\n', paste(sep='\t',icd9.codes,'ICD-9', explain_code(condense=F, as.icd9(icd9.codes)))))
-    icd10.codes  <-  dx.icd[[namei]][['icd10']]
-    cat(sprintf('%s\n', paste(sep='\t',icd10.codes, 'ICD-10', explain_code(condense=F, as.icd10cm(icd10.codes)))))
-    cat('\n')
+    if (namei %in% to.print) {
+        cat(sprintf('Variable Name: %s\n', label_list[sprintf('%s_pre_12months_count_bool', namei)]))
+        icd9.codes  <-  dx.icd[[namei]][['icd9']]
+        cat(sprintf('%s\n', paste(sep='\t',icd9.codes,'ICD-9', explain_code(condense=F, as.icd9(icd9.codes)))))
+        icd10.codes  <-  dx.icd[[namei]][['icd10']]
+        cat(sprintf('%s\n', paste(sep='\t',icd10.codes, 'ICD-10', explain_code(condense=F, as.icd10cm(icd10.codes)))))
+        cat('\n')
+    }
 } 
 sink()
 
-#TODO:Explain_code doesn't work for the ICD10 codes starting with E. The expand_range does, so the code all works, but the output above gives NA for the E* codes. need to use explain_icd9_10( as.icd10('E033'))
-
-
-# to.print  <-  c('smoking', 'o2', 'other_bacterial_diseases', 'pneumonia_and_influenza', 'pressure_ulcer', 'ischemic_heart_disease', 'CHF', 'PVD', 'CVD', 'dementia', 'COPD', 'PUD', 'MILDLD', 'DIAB_UC', 'DIAB_C', 'PARA', 'RD', 'cancer_nonlung', 'MSLD', 'METS',  'mental_disorders', 'nervous_system', 'other_heart_disease', 'veins_lymphatics_other_circulatory', 'rheum',
-
 sink('tbls/proc.codes.txt'); 
 for (namei in names(procs)) { 
-    cat(sprintf('Variable Name: %s', namei))
-    CPT_Codes %>% rbind( CPT_Codes_2)  %>% distinct(HCPC, .keep_all =T) %>% filter (HCPC %in% procs[[namei]] ) %>% select(HCPC, long_desc) %>% print(n=Inf)
-    cat('------------------------------\n\n\n\n')
+    if (namei %in% to.print) {
+        cat(sprintf('Variable Name: %s\n', label_list[sprintf('%s_pre_12months_count_bool', namei)]))
+       procii  <-  CPT_Codes %>% rbind( CPT_Codes_2)  %>% distinct(HCPC, .keep_all =T) %>% filter (HCPC %in% procs[[namei]] ) %>% select(HCPC, long_desc) 
+       for (proci in 1:nrow(procii) ) {
+           cat(sprintf('%s\t%s\n', procii$HCPC[proci], procii$long_desc[proci]))
+       }
+    }
+    cat('\n')
 } 
 sink()
 
