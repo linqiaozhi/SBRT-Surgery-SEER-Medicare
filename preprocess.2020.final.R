@@ -231,8 +231,6 @@ outpat.outpat.revenue <- outpat.outpat.revenue %>% mutate(
 medpar.tx  <-   medpar %>% select ( PATIENT_ID, sbrt.date, sublobar.date, lobar.date, other.resection.date) %>% filter(!is.na(sbrt.date) | !is.na(sublobar.date) | ! is.na(lobar.date) )
 carrier.tx  <-  carrier %>% select( PATIENT_ID, sbrt.date, sublobar.date, lobar.date, other.resection.date, ebus.date, med.date) %>% filter(!is.na(sbrt.date) | !is.na(sublobar.date) | ! is.na(lobar.date) | !is.na(other.resection.date) | !is.na(ebus.date)  )
 outpat.tx  <-  outpat.outpat.revenue %>% select(PATIENT_ID, sbrt.date, ebus.date) %>% filter(!is.na(sbrt.date) | !is.na(ebus.date))
-# This join filters to only surgeries which match the type and date of surgery between both medpar and carrier files
-# surgery.tx  <- medpar.tx %>% inner_join (carrier.tx, by = c('PATIENT_ID', 'sublobar.date', 'lobar.date', 'other.resection.date')) %>% select(PATIENT_ID, sublobar.date, lobar.date, other.resection.date)
 surgery.tx  <- medpar.tx %>% full_join (carrier.tx, by = c('PATIENT_ID'), suffix = c('.me', '.ca')) 
 
 sbrt.tx  <- bind_rows ( medpar.tx, carrier.tx, outpat.tx) %>% arrange(PATIENT_ID, sbrt.date, ebus.date) %>% select(PATIENT_ID, sbrt.date, ebus.date) %>% filter (nna(sbrt.date)| nna(ebus.date))
@@ -240,14 +238,6 @@ seer.tx  <- patient.seer %>% mutate (    seer.sublobar  = RX_SUMM_SURG_PRIM_SITE
                                          seer.lobar     = RX_SUMM_SURG_PRIM_SITE_1998 %in% c("30", "32", "33", "45", "46", "47", "48"),
                                          seer.other.resection     = RX_SUMM_SURG_PRIM_SITE_1998 %in% c("55", "65", "66") ) 
 
-# The patient's treatment is specified by the SEER variable, and the
-# medicare code tells when it occured. Both of these need to be present: SEER
-# code specifying the type of surgery and a Medpar or Carrier code specifying
-# the same type of surgery. The Medpar code is for the instution, the carrier
-# is for the surgeon.
-# Similarly, for SBRT there needs to a corresponding code in the SEER file and
-# the Carrier file. Medpar is not relevant as this is not an inpatient
-# procedure.
 patient.tx  <- seer.tx %>% 
     left_join (surgery.tx, by = 'PATIENT_ID')  %>%
     left_join(sbrt.tx, by = 'PATIENT_ID') %>% 
@@ -318,13 +308,6 @@ year.month  <-  function(x) {
 
 
 
-# colnames(mbsf.wide)
-#  mbsf.wide %>% select( -c(PATIENT_ID, BENE_ENROLLMT_REF_YR), -contains('MDCR')) 
-#  mbsf.wide %>% select( -) 
-# fofo %>% print(width=Inf)
-# fofo  <-  mbsf.wide[1:100,] %>% pivot_longer(cols = c(-c(PATIENT_ID, BENE_ENROLLMT_REF_YR), -contains('MDCR')), names_to = c(".value", "month" ), names_sep="_" )
-# fofo  <-  mbsf.wide[1:100,] %>% select(-contains('MDCR') ) %>%  pivot_longer(cols = contains('HMO'), names_to = c(".value", "month" ), names_sep="_"  )
-# fofo %>% print(width=Inf)
 
 mbsf.long.ffs  <- mbsf.wide %>% 
     select(-contains('MDCR') ) %>%  pivot_longer(cols = contains('HMO'), names_to = c(".value", "month" ), names_sep="_"  ) %>% 
@@ -786,7 +769,7 @@ A.final  <-  A.final %>% filter (valid.pet.scan)
 incex(A.final)
 A.final  <-  A.final %>% filter (microscopically_confirmed)
 incex(A.final)
-A.final  %>%  write_rds( 'data/A.final33.all.gte.65.RDS' )
+A.final  %>%  write_rds( 'data/A.final34.all.gte.65.RDS' )
 
 A.final %>% filter (tx == 'sublobar' ) %>% count (seer.surgery)
 A.final %>% filter (tx == 'sublobar') %>% count(RX_SUMM_SURG_PRIM_SITE_1998)
@@ -826,6 +809,6 @@ A.sens1  <-  A.sens1 %>% filter (valid.pet.scan)
 incex(A.sens1)
 A.sens1  <-  A.sens1 %>% filter (microscopically_confirmed)
 incex(A.sens1)
-A.sens1  %>%  write_rds( 'data/A.final33.sens1.RDS' )
+A.sens1  %>%  write_rds( 'data/A.final34.sens1.RDS' )
 table( A.sens1$tnm.n, useNA="ifany")
 
