@@ -3,11 +3,11 @@ label_list  <-  readRDS('data/label.list.RDS')
 cod.df <- tribble(
   ~COD_TO_SITE_RECODE,   ~Name,
   '00000', 'Alive',
-  '22030', 'Cancer death',
+  '22030', 'Lung cancer death',
   '50130', 'COPD',
   '50060', 'Cardiac',
   '50080', 'Cerebrovascular',
-  '50300', 'Other non-cancer',
+  '50300', 'Other non-lung ancer',
   # '50120', 'Pneumonia'
 )
 
@@ -48,6 +48,7 @@ label_list  <-  list(
                      PUD_pre_12months_count_bool = 'Peptic ulcer disease',
                      MILDLD_pre_12months_count_bool = 'Mild liver disease',
                      MSLD_pre_12months_count_bool = 'Moderate or severe liver disease',
+                     LD_pre_12months_count_bool = 'Liver disease',
                      DIAB_UC_pre_12months_count_bool = 'Uncomplicated diabetes',
                      DIAB_C_pre_12months_count_bool = 'Complicated diabetes',
                      # PARA_pre_12months_count_bool = 'Paralysis',
@@ -57,6 +58,7 @@ label_list  <-  list(
                      mental_disorders_pre_12months_count_bool = 'Mental disorders',
                      nervous_system_pre_12months_count_bool = 'Neurological disorders',
                      # veins_lymphatics_other_circulatory_pre_12months_count_bool = 'Veins, lymphatics, other circulatory',
+                     mobility_aids_pre_12months_count_bool = 'Motility aids',
                      dialysis_pre_12months_count_bool = 'Dialysis',
                      echo_pre_12months_count_bool = 'Echocardiogram',
                      # rheum_pre_12months_count_bool = 'Rheumatologic diseases',
