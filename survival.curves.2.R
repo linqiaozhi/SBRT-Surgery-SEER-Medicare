@@ -23,7 +23,7 @@ set.seed(3)
 
 subset.name  <- 'all.gte.65'
 nc_time_days = 90
-sm  <- load.data(33,subset.name, nc_time_days = nc_time_days)
+sm  <- load.data(35,subset.name, nc_time_days = nc_time_days)
 
 ################################
 # Overall survival curve
