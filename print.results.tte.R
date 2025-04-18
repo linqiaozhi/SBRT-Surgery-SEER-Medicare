@@ -10,7 +10,7 @@ display.outcomes  <- c(  'death.copd','death.heart',    'death.stroke', 'death.n
 nc_time_days = 90
 for (subset.name in subset.names ){
     # analysis.name  <- sprintf('v10.tte.ttmin0.%s', subset.name)
-    analysis.name  <- sprintf('v41.tte.nc_time_ss_no_vs_%d_%s', nc_time_days, subset.name)
+    analysis.name  <- sprintf('v42.tte.nc_time_ss_no_vs_%d_%s', nc_time_days, subset.name)
     plot.list  <- list()
     for (lambda.s in lambda.ss) {
         # analysis.name  <- sprintf('v3.tte.nocopdinW1.%s', subset.name)
@@ -20,7 +20,7 @@ for (subset.name in subset.names ){
             HDs  <- readRDS(sprintf('data/%s.hazard.differences.outcomes.%s.rds', analysis.name, type))
             toprint  <- rbind(HDs)
             for (i in 1:nrow(toprint)) {
-                cat( sprintf( '%s| %.3f (%.3f, %.3f)\n', rownames(toprint)[i], toprint[i,1], toprint[i,2], toprint[i,3]) ) 
+                cat( sprintf( '%s| %.4f (%.4f, %.4f)\n', rownames(toprint)[i], toprint[i,1], toprint[i,2], toprint[i,3]) ) 
             }
             print('=====================')
             type.titles  <-  list('raw'='Unadjusted', 'adj'='Adjusted', 'proximal'='Proximal')

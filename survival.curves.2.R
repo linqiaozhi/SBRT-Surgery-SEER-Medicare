@@ -1,6 +1,6 @@
 # library(pci2s)
-# devtools::load_all('/Users/george/Research_Local/pci2s_gcl/pci2s')
-devtools::load_all('/Users/george/Research_Local/pci2s/')
+devtools::load_all('/Users/george/Research_Local/pci2s_gcl/pci2s')
+# devtools::load_all('/Users/george/Research_Local/pci2s/')
 library(ggfortify)
 library(survival)
 library(tidycmprsk)
@@ -23,7 +23,7 @@ set.seed(3)
 
 subset.name  <- 'all.gte.65'
 nc_time_days = 90
-sm  <- load.data(subset.name, nc_time_days = nc_time_days)
+sm  <- load.data(33,subset.name, nc_time_days = nc_time_days)
 
 ################################
 # Overall survival curve
@@ -60,8 +60,8 @@ risk.table  <- g1$table
 # Cause-specific and other-cause CIFs
 ################################
 # Time-to-event outcomes 
-outcome.name  <-  'death.cause.specific'
-W1  <- 'death.other.cause.gt90day'
+outcome.name  <-  'death.lc.specific'
+W1  <- 'death.other.cause'
 A.temp  <-  sm$A.final %>% mutate( 
                                W1.time  = if_else (nna(!!rlang::sym(W1)), as.numeric( !!rlang::sym(W1) - tx.date, units = "days" ), tt),
                                W1.time  = if_else (W1.time == 0, 0.5, W1.time)/365,
@@ -76,7 +76,8 @@ A.temp  <-  sm$A.final %>% mutate(
 )
 
 A_ = (A.temp$tx == 'sbrt')*1.0
-X_  <-  model.matrix(as.formula(sprintf('~ %s', paste(sm$Xs, collapse = '+'))),  A.temp)[,-1]
+X_  <-  model.matrix(as.formula(sprintf('~ %s', paste(sm$X2s, collapse = '+'))),  A.temp)[,-1]
+sm$Xs
 Z_  <- A.temp[,sm$Zs]
 Y_ = A.temp$Y.time
 
