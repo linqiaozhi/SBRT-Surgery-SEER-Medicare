@@ -118,12 +118,11 @@ ebus.cpts  <- c('31620', '31652', '31653', '31654')
 # There do not seem to be any ICD codes corresponding specifically to ebus procedure
 ebus.icds  <- c()
 #Biopsy or cytology via bronch. Not including bronch without  tissue.
-bronch.bx.cpts  <- c( '31625', '31628', '31629', '31632', '31633', '31622', '31623', '31624')
-bronch.bx.icds  <- c('3201',  '3324', '3327', 
-                     '0BB28ZX', '0BB38ZX', '0BB48ZX', '0BB58ZX', '0BB68ZX', '0BB78ZX', '0BB88ZX', '0BB98ZX', '0BBB8ZX', '0BD38ZX', '0BD48ZX', '0BD58ZX', '0BD68ZX', '0BD78ZX', '0BD88ZX', '0BD98ZX', '0BDB8ZX', '0BBC8ZX', '0BBD8ZX', '0BBF8ZX', '0BBG8ZX', '0BBJ8ZX', '0BBK8ZX', '0BBL8ZX', '0BDC8ZX', '0BDD8ZX', '0BDF8ZX', '0BDG8ZX', '0BDH8ZX', '0BDJ8ZX', '0BDK8ZX', '0BDL8ZX', '0BDM8ZX', '0BBM8ZX', '07B74ZX', '07D74ZX', '07D84ZX', '07D94ZX', '07DK4ZX', '0BJ08ZZ', '0BB18ZX', '0BD18ZX', '0BD28ZX')
+# bronch.bx.cpts  <- c( '31625', '31628', '31629', '31632', '31633', '31622', '31623', '31624')
+# bronch.bx.icds  <- c('3201',  '3324', '3327', 
+#                      '0BB28ZX', '0BB38ZX', '0BB48ZX', '0BB58ZX', '0BB68ZX', '0BB78ZX', '0BB88ZX', '0BB98ZX', '0BBB8ZX', '0BD38ZX', '0BD48ZX', '0BD58ZX', '0BD68ZX', '0BD78ZX', '0BD88ZX', '0BD98ZX', '0BDB8ZX', '0BBC8ZX', '0BBD8ZX', '0BBF8ZX', '0BBG8ZX', '0BBJ8ZX', '0BBK8ZX', '0BBL8ZX', '0BDC8ZX', '0BDD8ZX', '0BDF8ZX', '0BDG8ZX', '0BDH8ZX', '0BDJ8ZX', '0BDK8ZX', '0BDL8ZX', '0BDM8ZX', '0BBM8ZX', '07B74ZX', '07D74ZX', '07D84ZX', '07D94ZX', '07DK4ZX', '0BJ08ZZ', '0BB18ZX', '0BD18ZX', '0BD28ZX')
 med.cpts  <- c('39400', '39401', '39402')
-# No iCD9 code for med
-med.icds  <- c('0WBC4ZX')
+med.icds  <- c('3422', '07B74ZX')
 sublobar.cpts  <- c(
                         '32484', # The provider removes a segment of the lung smaller than a lobe.
                          '32500', # Partial removal of lung
@@ -447,7 +446,11 @@ procs  <- list (
             'transportation_services' =  expand_range_procs ( 'A0021', 'A0999', CPT_Codes),
             'chemotherapy' = expand_range_procs ('J9000', 'J9999', CPT_Codes),
             'echo' = c('93303', '93304', '93306', '93307', '93308' ),
-            'dialysis' = c('90935', '90937', '90940')
+            'stress_test' = c( "93015", "93016", "93017", "93018", "93350", "93351", "93352", "78451", "78452", "78453", "78454", "78491", "78492"),
+            'pft' = c(  "94010", "94011", "94012", "94013", "94060", "94070", "94150", "94200", "94240", "94250", "94260", "94360", "94375", "94617", "94618", "94620", "94621", "94720", "94725", "94726", "94727", "94728", "94729", "94770"),
+            'dialysis' = c('90935', '90937', '90940'),
+            'med' = med.cpts,
+            'ebus' = ebus.cpts
                 )
 
 

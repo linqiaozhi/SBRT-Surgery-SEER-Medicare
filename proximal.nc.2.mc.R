@@ -1,6 +1,6 @@
-# library(pci2s)
 # devtools::load_all('/Users/george/Research_Local/pci2s_gcl/pci2s')
 library(pci2s)
+# devtools::install_github('KenLi93/pci2s')
 # devtools::load_all('/Users/george/Research_Local/pci2s/')
 library(glmnet)
 library(ahaz)
@@ -22,13 +22,14 @@ vs  <-  F
 nboot = 1000
 library(foreach) 
 library(doParallel)
+ # subset.name  <-  subset.names[[1]]
 for (subset.name in subset.names ){
     # Each analysis is separate, so set the seed for reproducibility. If
     # it's set outside the loop then the results can only be reproduced by
     # rerunning the entire script.
     set.seed(3)
-    sm  <- load.data(35, subset.name, nc_time_days = nc_time_days, W1s.global = T)
-    analysis.name  <- sprintf('data35.mc.v1.vsF.nctime%d_%s', nc_time_days, subset.name)
+    sm  <- load.data(1003, subset.name, nc_time_days = nc_time_days, W1s.global = T)
+    analysis.name  <- sprintf('data49.nctime%d_%s', nc_time_days, subset.name)
     print('====================')
     print(analysis.name)
     print('====================')
@@ -36,13 +37,18 @@ for (subset.name in subset.names ){
     ## Table 1 
     #################################
     if (T) {
+        sm$A.final$mediastinal.staging  <- sm$A.final$med_pre_count > 0 |  sm$A.final$ebus_pre_count > 0
+        sm$A.final$histology3  <- sm$A.final$histology
+        sm$A.final$histology3[sm$A.final$histology3 == 'Adenocarcinoma, papillary']  <- 'Adenocarcinoma, NOS/other'
+
         Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/Resources/app/quarto/bin/tools")
         tblcontrol <- tableby.control(numeric.stats = c('Nmiss', 'meansd'), numeric.simplify = T, cat.simplify =T, digits = 1,total = T,test = F)
-        f  <-  sprintf( 'tx ~ %s', paste( c(sm$X.numeric, sm$X.factor,'histology', gsub('_count', '_count_bool', c(sm$Zs))), collapse = "+"))
+        f  <-  sprintf( 'tx ~ %s', paste( c(sm$X.numeric, sm$X.factor,'race', 'histology3','mediastinal.staging', gsub('_count', '_count_bool', c(sm$Zs))), collapse = "+"))
         labels(sm$A.final)  <-  label_list
         tt <- tableby(as.formula(f), data=sm$A.final, control = tblcontrol)
         summary(tt) %>% write2html(sprintf('/Users/george/Research_Local/SEER-Medicare/tbls/table1_2_%s.htm', analysis.name), quiet=T)
     }
+
 
     #################################
     # # variable selection for W1
@@ -84,6 +90,7 @@ for (subset.name in subset.names ){
     comb <- function(...) {
       mapply('rbind', ..., SIMPLIFY=FALSE)
     }
+    # outcome.i = 2
     hd.outcomes  <- foreach(outcome.i=1:length(sm$outcome.names), .combine ='comb', .multicombine = T,.packages=c('dplyr','timereg', 'pci2s') ) %dopar% {
 
         outcome.name  <-  sm$outcome.names[outcome.i]
@@ -107,6 +114,7 @@ for (subset.name in subset.names ){
         f  <-  sprintf( 'Surv(outcome.time, outcome.bool) ~ const(tx) + %s',  paste(sprintf('const(%s)', c(sm$X2s, sm$Zs)), collapse="+") )
         m  <-  aalen( as.formula(f) ,  data = A.temp, robust = 0)
         hd.outcome.adj  <-  c(outcome=outcome.i,  coef(m)['const(tx)sbrt', c('Coef.', 'lower2.5%', 'upper97.5%')]) 
+        print.martingales  <-  T
         # Proximal
         set.seed(3)
         if (!outcome.name %in% c('death', 'death.other.cause')) {
@@ -117,7 +125,16 @@ for (subset.name in subset.names ){
             Z_  <- A.temp[,sm$Zs]
             Z_selected  <-  Z_[,colnames(Z_)  %in% selected.columns[[W1]] ]
             Y_ = A.temp$outcome.time
+            table( A.temp$cause, useNA="ifany")
             print(system.time(mout  <- p2sls.cprisk.nc  (times = Y_, cause = A.temp$cause, A = A_,  X1 = X1_selected,X2 = X2_,Z = Z_selected, nc_time = nc_time_days/365,  bootstrap = T, nboot = nboot, conf.level = 0.95) ))
+            if (print.martingales && outcome.name == 'death.lc.specific') {
+                res  <- p2sls.cprisk.nc.martingale.residuals(times = Y_, cause = A.temp$cause, A = A_,  a = 1, X=  X1_selected, Z = as.matrix(Z_selected), nc_time = nc_time_days/365  )
+                saveRDS(res, sprintf('data/%s.%s.martingale.residuals.rds', analysis.name, outcome.name))
+                # A.temp %>% filter (PVD_pre_12months_unique_count > 12) %>% t
+                # head(Z_selected)
+                # max of each column of Z_selected
+                # apply(Z_selected, 2, max)
+            }
             mouts[[outcome.name]]  <-  mout
             est <- mout$beta_a
             hd.outcome.proximal  <-  c(outcome=outcome.i, estimate=est, low_ci=mout$beta_a_ci[1], high_ci=mout$beta_a_ci[2])
@@ -129,11 +146,12 @@ for (subset.name in subset.names ){
     }
     # order each element of list by outcome
     # hd.outcomes2  <- laply(hd.outcomes, function(x) x[order(x[,1]),])
-    str(hd.outcomes)
+    # str(hd.outcomes)
     # join this
     hazard.differences.outcomes[,1:3]  <- hd.outcomes[[1]][,-1]
     hazard.differences.outcomes.adj[,1:3]  <- hd.outcomes[[2]][,-1]
     hazard.differences.outcomes.proximal[,1:3]  <- hd.outcomes[[3]][,-1]
+    # print(selected.columns)
     print(hazard.differences.outcomes[,1:3])
     print(hazard.differences.outcomes.adj[,1:3])
     print(hazard.differences.outcomes.proximal[,1:3])
@@ -142,6 +160,5 @@ for (subset.name in subset.names ){
     saveRDS(hazard.differences.outcomes.adj, sprintf('data/%s.hazard.differences.outcomes.adj.rds', analysis.name))
     saveRDS(hazard.differences.outcomes.proximal, sprintf('data/%s.hazard.differences.outcomes.proximal.rds', analysis.name))
 }
-
 
 

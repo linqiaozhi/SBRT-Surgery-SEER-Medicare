@@ -5,13 +5,12 @@ library(patchwork)
 library('ggplot2')
 variable.selection  <- 'automatic'
  subset.names  <- list('all.gte.65', 'sens1')
+ # subset.names  <- list('all.gte.65')
 display.outcomes  <- c(  'death.copd','death.heart',    'death.stroke', 'death.noncopd.nonheart.nonstroke', sprintf('death.other.%d', 1:4))
  lambda.ss  <- list('lambda.min')
 nc_time_days = 90
 for (subset.name in subset.names ){
-    # analysis.name  <- sprintf('v10.tte.ttmin0.%s', subset.name)
-    analysis.name  <- sprintf('data35.mc.v1.vsF.nctime%d_%s', nc_time_days, subset.name)
-    # analysis.name  <- sprintf('v42.tte.nc_time_ss_no_vs_%d_%s', nc_time_days, subset.name)
+    analysis.name  <- sprintf('data49.nctime%d_%s', nc_time_days, subset.name)
     plot.list  <- list()
     for (lambda.s in lambda.ss) {
         # analysis.name  <- sprintf('v3.tte.nocopdinW1.%s', subset.name)
@@ -46,7 +45,7 @@ for (subset.name in subset.names ){
         print('=====================')
     }
     g1  <-   wrap_plots(plot.list, nrow =3, ncol = 1, heights = c(1,1,0.9)) + plot_layout(guides = "collect", axes = "collect")
-    ggsave(g1, width=6, height=6, filename = sprintf('figs/%s.pdf', analysis.name))
+    ggsave(g1, width=6, height=8, filename = sprintf('figs/%s.pdf', analysis.name))
 
     HDs  <- list()
     for (type in c('raw','adj', 'proximal') ) {

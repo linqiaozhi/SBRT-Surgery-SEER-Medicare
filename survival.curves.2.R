@@ -23,7 +23,7 @@ set.seed(3)
 
 subset.name  <- 'all.gte.65'
 nc_time_days = 90
-sm  <- load.data(35,subset.name, nc_time_days = nc_time_days)
+sm  <- load.data(1003,subset.name, nc_time_days = nc_time_days)
 
 ################################
 # Overall survival curve
@@ -43,9 +43,10 @@ surv.curv  <-  function(fit, dframe , title, risk.table=T){
                risk.table = risk.table,
                tables.height = 0.25,
                tables.theme = custom.risk.table.theme,
+               xlim = c(0, 10),
                fontsize = 3,
                risk.table.title = '',
-               palette = c("#E7B800", "#2E9FDF"),
+               palette = c("#2E9FDF", "#E7B800"),
                ggtheme = theme_bw(), # Change ggplot2 theme
                break.time.by = 2.5
     ) 
@@ -53,8 +54,12 @@ surv.curv  <-  function(fit, dframe , title, risk.table=T){
 dframe  <-  data.frame(time = sm$A.final$tt/365, status = nna(sm$A.final$death), A=sm$A.final$tx)
 fit  <- survfit(Surv(time, status) ~ A, data = dframe)
 # Customized survival curves
-g1  <- surv.curv(fit, dframe, 'Overall mortality', risk.table =T)
+g1  <- surv.curv(fit, dframe, 'A) Overall survival (unadjusted)', risk.table =T)
 risk.table  <- g1$table
+
+ g1$table$data <- g1$table$data %>% filter(time != 10)
+ g1$table
+ g1$table$layers[[1]]$data  <- g1$table$layers[[1]]$data  %>% filter(time != 10)
 
 ################################
 # Cause-specific and other-cause CIFs
@@ -96,19 +101,19 @@ dframe$status  <-  case_match(
                               ) %>% as.factor
 dframe$status  <- factor(dframe$status, levels=c('Censored', 'Cause-specific death', 'Other-cause death'))
 cuminc.obj <- cuminc(Surv(time, status) ~ A, data = dframe) 
-g2   <- ggcuminc(cuminc.obj, outcome = "Cause-specific death", linewidth = 1)  + ggtitle ("Cause-specific death")+ g1$plot$theme + theme(legend.position = 'none') + ylim(0, 0.6)  + scale_colour_manual( values=c("#E7B800", "#2E9FDF"))
-g3  <-  ggcuminc(cuminc.obj, outcome = "Other-cause death", linewidth = 1)+ ggtitle ("Other-cause death") + ylim(0, 0.6) + g1$plot$theme + theme(legend.position = 'bottom') + scale_colour_manual( values=c("#E7B800", "#2E9FDF")) 
+g2   <- ggcuminc(cuminc.obj, outcome = "Cause-specific death", linewidth = 1)  + ggtitle ("B) Cause-specific mortality (unadjusted)")+ g1$plot$theme+ylim(0, 0.6) +xlim(0,10)+ theme(legend.position = 'none') + scale_colour_manual( values=c("#E7B800", "#2E9FDF"))
+g3  <-  ggcuminc(cuminc.obj, outcome = "Other-cause death", linewidth = 1)+ ggtitle ("Other-cause mortality (unadjusted)") + xlim(0,10) + ylim(0, 0.6) + g1$plot$theme + theme(legend.position = 'none') + scale_colour_manual( values=c("#E7B800", "#2E9FDF")) 
+g2
 g  <-  g1$plot / g2 /g3 + plot_layout(heights = c(1, 1, 1), axes='collect')
-ggsave(plot=g, filename='figs/raw.curves.pdf', width=5, height=9)
-ggsave(risk.table, filename='figs/risk.table.pdf', width=5, height=1)
+ggsave(plot=g, filename='figs/raw.curves.2.pdf', width=5, height=9)
+ggsave(risk.table, filename='figs/risk.table.2.pdf', width=5, height=1)
 
-g  <-  g1$plot / g2 /g3 / risk.table + plot_layout(heights = c(1, 1, 1, 0.4), axes='collect')
-g
 
 ################################
 # Proximally adjusted CIFs
 ################################
 
+A.temp %>% select( tx, cause, tt, death.lc.specific, death.other.cause) %>% head(20)
 survfunc_a0 <- p2sls.cprisk.nc.cif(times = Y_, cause = A.temp$cause, A = A_, a = 0, X = X_, Z = Z_, nc_time = nc_time_days/365)
 survfunc_a1 <- p2sls.cprisk.nc.cif(times = Y_, cause = A.temp$cause, A = A_, a = 1, X = X_, Z = Z_, nc_time = nc_time_days/365)
 
@@ -119,8 +124,20 @@ surv.curves.out <- surv.curves.out %>% mutate(time = t, surv=survfunc)
 
 surv.curves.out$strata  <- factor(surv.curves.out$strata, levels = c('SBRT','Surgery' ))
 surv.curv.2  <-  function( surv.curves.out ) {
-    ggplot (surv.curves.out, aes(x = t, y = cif0, color = strata)) + geom_line(linewidth=1) + xlab("Time") + ylab("Cumulative incidence") + scale_color_manual(values = c("#E7B800", "#2E9FDF")) + theme_minimal() + ggtitle('Cumulative incidence function (Proximally-adjusted)') + theme(legend.position = "bottom", legend.title=element_blank()) + ylim(0,0.6)
+    ggplot (surv.curves.out, aes(x = t, y = cif0, color = strata)) + geom_line(linewidth=1) + xlab("Time") + ylab("Cumulative Incidence") + scale_color_manual(values = c("#E7B800", "#2E9FDF")) + theme_minimal() + ggtitle('C) Cause-specific mortality (proximally-adjusted)') + theme(legend.position = "none", legend.title=element_blank()) + ylim(0,0.6) + xlim(0,10)
 }
 gp  <- surv.curv.2(surv.curves.out) + g1$plot$theme
-ggsave(plot=gp, filename='figs/cifnctime90.pdf', width=5, height=4)
+ggsave(plot=gp, filename='figs/cifnctime90.2.pdf', width=5, height=4)
+
+# g  <-  g1$plot / g2 /gp/ risk.table + plot_layout(heights = c(1, 1, 1, 0.4), axes='collect')
+# g
+
+# ggsave(plot=g, filename='figs/Figure3.pdf', width=5, height=9)
+
+g  <-  g1$plot + risk.table  / (g2 + g3)   + plot_layout(heights = c(1, 0.4, 1), axes='collect')
+ggsave(g1$plot, filename='figs/Figure3a.pdf', width=5, height=3)
+ggsave(risk.table, filename='figs/Figure3rt.pdf', width=5, height=3*0.4)
+ggsave(g2 , filename='figs/Figure3b.pdf', width=5, height=3)
+ggsave(gp , filename='figs/Figure3c.pdf', width=5, height=3)
+g
 

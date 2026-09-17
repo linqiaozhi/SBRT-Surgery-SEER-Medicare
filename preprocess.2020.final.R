@@ -1,5 +1,3 @@
-#install.packages('https://cran.r-project.org/src/contrib/Archive/SAScii/SAScii_1.0.tar.gz', repos=NULL, type="source")
-
 library(arsenal)
 library('SAScii')
 library(lubridate)
@@ -405,7 +403,7 @@ for (i in 1:length(dx.icd)) {
              mutate( 
                     temp = if_else ( icd9or10 == 'icd9', DX %in% dxoi$icd9,DX %in% dxoi$icd10 ),
                     temp.pre =  if_else(temp & (CLM_THRU_DT < tx.date), CLM_THRU_DT, ymd(NA_character_)), 
-                    temp.pre.12months =  if_else(temp & (CLM_THRU_DT < tx.date & CLM_THRU_DT >= (tx.date - months(12))), CLM_THRU_DT, ymd(NA_character_)), 
+                    temp.pre.12months =  if_else(temp & (CLM_THRU_DT < tx.date & CLM_THRU_DT >= (tx.date %m-% months(12))), CLM_THRU_DT, ymd(NA_character_)), 
                     temp.post =  if_else(temp & (CLM_THRU_DT > tx.date), CLM_THRU_DT, ymd(NA_character_))  ,
                     temp.any =  if_else(temp , CLM_THRU_DT, ymd(NA_character_))  
                     )  %>% 
@@ -415,6 +413,7 @@ for (i in 1:length(dx.icd)) {
                           !!sprintf('%s_pre_count', dx.name ) := length((na.omit(temp.pre))),
                           !!sprintf('%s_pre_month_count', dx.name ) := length(unique(year.month(na.omit(temp.pre)))),
                           !!sprintf('%s_pre_12months_count', dx.name ) := length((na.omit(temp.pre.12months))),
+                          !!sprintf('%s_pre_12months_unique_count', dx.name ) := length(unique(year.month((na.omit(temp.pre.12months))))),
                           !!sprintf('%s_any_count', dx.name ) := length((na.omit(temp.any))),
                           !!sprintf('%s_any_month_count', dx.name ) := length(unique(year.month(na.omit(temp.any)))),
                           !!sprintf('%s_post_count', dx.name ) := length((na.omit(temp.post))),
@@ -425,7 +424,6 @@ for (i in 1:length(dx.icd)) {
 
 patient.dx   <-  dx.hardcodeds   %>%
     mutate(across(contains('count'), ~replace(., is.na(.), 0)))
-
 
 ################################
 # SECTION V Procedure and DME codes (not for treatment)
@@ -482,7 +480,7 @@ for (i in 1:length(procois)) {
              mutate( 
                     temp =   HCPCS_CD %in% procoi,
                     temp.pre =  if_else(temp & (CLM_THRU_DT < tx.date), CLM_THRU_DT, ymd(NA_character_)), 
-                     temp.pre.12months =  if_else(temp & (CLM_THRU_DT < tx.date & CLM_THRU_DT >= (tx.date - months(12))), CLM_THRU_DT, ymd(NA_character_)), 
+                     temp.pre.12months =  if_else(temp & (CLM_THRU_DT < tx.date & CLM_THRU_DT >= (tx.date %m-% months(12))), CLM_THRU_DT, ymd(NA_character_)), 
                     temp.post =  if_else(temp & (CLM_THRU_DT > tx.date), CLM_THRU_DT, ymd(NA_character_))  ,
                     temp.any =  if_else(temp , CLM_THRU_DT, ymd(NA_character_))  
                     )  %>% 
@@ -491,6 +489,7 @@ for (i in 1:length(procois)) {
                           !!proc.name := first(na.omit(temp.post)), 
                           !!sprintf('%s_pre_count', proc.name ) := length((na.omit(temp.pre))),
                            !!sprintf('%s_pre_12months_count', proc.name ) := length((na.omit(temp.pre.12months))),
+                           !!sprintf('%s_pre_12months_unique_count', proc.name ) := length(unique(year.month((na.omit(temp.pre.12months))))),
                           !!sprintf('%s_pre_month_count', proc.name ) := length(unique(year.month(na.omit(temp.pre)))),
                           !!sprintf('%s_any_count', proc.name ) := length((na.omit(temp.any))),
                           !!sprintf('%s_any_month_count', proc.name ) := length(unique(year.month(na.omit(temp.any)))),
@@ -556,7 +555,7 @@ for (i in 1:length(drugs)) {
     mutate(
       temp = PROD_SRVC_ID %in% drugoi,
       temp.pre = if_else(temp & (SRVC_DT < tx.date), SRVC_DT, ymd(NA_character_)),
-      temp.pre.12months =  if_else(temp & (SRVC_DT < tx.date & SRVC_DT >= (tx.date - months(12))), SRVC_DT, ymd(NA_character_)), 
+      temp.pre.12months =  if_else(temp & (SRVC_DT < tx.date & SRVC_DT >= (tx.date %m-% months(12))), SRVC_DT, ymd(NA_character_)), 
       temp.post = if_else(temp & (SRVC_DT > tx.date), SRVC_DT, ymd(NA_character_)),
       temp.any = if_else(temp, SRVC_DT, ymd(NA_character_))
     ) %>% 
@@ -565,6 +564,7 @@ for (i in 1:length(drugs)) {
       !!drug.name := first(na.omit(temp.post)),
       !!sprintf('%s_pre_count', drug.name) := length((na.omit(temp.pre))),
       !!sprintf('%s_pre_12months_count', drug.name ) := length((na.omit(temp.pre.12months))),
+      !!sprintf('%s_pre_12months_unique_count', drug.name ) := length(unique(year.month(na.omit(temp.pre.12months)))),
       !!sprintf('%s_pre_month_count', drug.name ) := length(unique(year.month(na.omit(temp.pre)))),
       !!sprintf('%s_any_count', drug.name ) := length((na.omit(temp.any))),
       !!sprintf('%s_any_month_count', drug.name ) := length(unique(year.month(na.omit(temp.any)))),
@@ -609,13 +609,14 @@ A  <-  A %>%
                                         RX_SUMM_SURG_PRIM_SITE_1998 %in% c("00") ~ 'no_surgery',
                                          T ~ NA_character_ ),
            age = as.numeric(age),
+           marital.status = as.numeric(marital.status),
            sex = case_when ( 
-                            sex == 1 ~ 'Male',
-                            sex == 2 ~ 'Female', 
-                            sex == 9 ~ 'Unknown' ),
+                            sex == '1' ~ 'Male',
+                            sex == '2' ~ 'Female', 
+                            sex == '9'~ 'Unknown' ),
            race = case_when ( 
-                             race ==1 ~ 'White',
-                             race ==2 ~ 'Black',
+                             race =='1' ~ 'White',
+                             race =='2' ~ 'Black',
                              T ~ 'Other or unknown'),
            marital.status = case_when ( 
                                        marital.status ==1 ~ 'Never married',
@@ -672,23 +673,26 @@ histology =  case_when(
                        grepl("^848", histology.code) ~ 'Adenocarcinoma, mucinous',
                        histology.code %in% c('8012/3', '8013/3', '8014/3') ~ 'Large cell', # large cell
                        T ~ 'Other'),
-           tnm.t = case_when ( 
-                              str_detect(DERIVED_EOD_2018_T_2018, '^T1*') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]1') | DERIVED_AJCC_T_7TH_ED_2010_2015 %>% between (100,190) | DERIVED_AJCC_T_7TH_ED_2010_2015 %>% between(800, 810) ~ '1',
-                              str_detect(DERIVED_EOD_2018_T_2018, '^T2*') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]2') | DERIVED_AJCC_T_7TH_ED_2010_2015  %>% between (200,290)~ '2',
-                              str_detect(DERIVED_EOD_2018_T_2018, '^T3') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]3') | DERIVED_AJCC_T_7TH_ED_2010_2015  %>% between (300,390) ~ '3',
-                              str_detect(DERIVED_EOD_2018_T_2018, '^T4') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]4') | DERIVED_AJCC_T_7TH_ED_2010_2015  %>% between (400,499) ~ '4',
-                              str_detect(DERIVED_EOD_2018_T_2018, '^TX') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]X') | DERIVED_AJCC_T_7TH_ED_2010_2015  == 888 ~ 'X',
+           DERIVED_AJCC_T_7TH_ED_2010_2015_num = as.numeric(DERIVED_AJCC_T_7TH_ED_2010_2015),
+           DERIVED_AJCC_N_7TH_ED_2010_2015_num = as.numeric(DERIVED_AJCC_N_7TH_ED_2010_2015),
+           DERIVED_AJCC_M_7TH_ED_2010_2015_num = as.numeric(DERIVED_AJCC_M_7TH_ED_2010_2015),
+                  tnm.t = case_when ( 
+                              str_detect(DERIVED_EOD_2018_T_2018, '^T1*') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]1') | DERIVED_AJCC_T_7TH_ED_2010_2015_num %>% between (100,190) | DERIVED_AJCC_T_7TH_ED_2010_2015_num %>% between(800, 810) ~ '1',
+                              str_detect(DERIVED_EOD_2018_T_2018, '^T2*') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]2') | DERIVED_AJCC_T_7TH_ED_2010_2015_num  %>% between (200,290)~ '2',
+                              str_detect(DERIVED_EOD_2018_T_2018, '^T3') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]3') | DERIVED_AJCC_T_7TH_ED_2010_2015_num  %>% between (300,390) ~ '3',
+                              str_detect(DERIVED_EOD_2018_T_2018, '^T4') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]4') | DERIVED_AJCC_T_7TH_ED_2010_2015_num  %>% between (400,499) ~ '4',
+                              str_detect(DERIVED_EOD_2018_T_2018, '^TX') |str_detect(DERIVEDSEERCOMBINED_T_2016_2017, '^[cp]X') | DERIVED_AJCC_T_7TH_ED_2010_2015_num  == 888 ~ 'X',
                               T ~ NA_character_ ),
            tnm.n = case_when ( 
-                             str_detect(DERIVED_EOD_2018_N_2018, '^N0') | str_detect(DERIVEDSEERCOMBINED_N_2016_2017, '^[cp]0') | DERIVED_AJCC_N_7TH_ED_2010_2015  %>% between (0,40) ~ '0',
-                             str_detect(DERIVED_EOD_2018_N_2018, '^N1') | str_detect(DERIVEDSEERCOMBINED_N_2016_2017, '^[cp]1') | DERIVED_AJCC_N_7TH_ED_2010_2015  %>% between (100,199) ~ '1', 
-                             str_detect(DERIVED_EOD_2018_N_2018, '^N2') | str_detect(DERIVEDSEERCOMBINED_N_2016_2017, '^[cp]2') | DERIVED_AJCC_N_7TH_ED_2010_2015  %>% between (200,299)~ '2',
-                             str_detect(DERIVED_EOD_2018_N_2018, '^N3') | str_detect(DERIVEDSEERCOMBINED_N_2016_2017, '^[cp]3') | DERIVED_AJCC_N_7TH_ED_2010_2015  %>% between (300,399) ~ '3',
-                             str_detect(DERIVED_EOD_2018_N_2018, '^NX') | str_detect(DERIVEDSEERCOMBINED_N_2016_2017, '^[cp]X') | DERIVED_AJCC_N_7TH_ED_2010_2015  == 99 ~ 'X',
+                             str_detect(DERIVED_EOD_2018_N_2018, '^N0') | str_detect(DERIVEDSEERCOMBINED_N_2016_2017, '^[cp]0') | DERIVED_AJCC_N_7TH_ED_2010_2015_num  %>% between (0,40) ~ '0',
+                             str_detect(DERIVED_EOD_2018_N_2018, '^N1') | str_detect(DERIVEDSEERCOMBINED_N_2016_2017, '^[cp]1') | DERIVED_AJCC_N_7TH_ED_2010_2015_num  %>% between (100,199) ~ '1', 
+                             str_detect(DERIVED_EOD_2018_N_2018, '^N2') | str_detect(DERIVEDSEERCOMBINED_N_2016_2017, '^[cp]2') | DERIVED_AJCC_N_7TH_ED_2010_2015_num  %>% between (200,299)~ '2',
+                             str_detect(DERIVED_EOD_2018_N_2018, '^N3') | str_detect(DERIVEDSEERCOMBINED_N_2016_2017, '^[cp]3') | DERIVED_AJCC_N_7TH_ED_2010_2015_num  %>% between (300,399) ~ '3',
+                             str_detect(DERIVED_EOD_2018_N_2018, '^NX') | str_detect(DERIVEDSEERCOMBINED_N_2016_2017, '^[cp]X') | DERIVED_AJCC_N_7TH_ED_2010_2015_num  == 99 ~ 'X',
                               T ~ NA_character_ ),
            tnm.m = case_when ( 
-                             str_detect(DERIVED_EOD_2018_M_2018, '^M0') |  str_detect(DERIVEDSEERCOMBINED_M_2016_2017, '^[cp]0') | DERIVED_AJCC_M_7TH_ED_2010_2015 %>% between (0, 10) ~ '0',
-                             str_detect(DERIVED_EOD_2018_M_2018, '^M1*') |  str_detect(DERIVEDSEERCOMBINED_M_2016_2017, '^[cp]1') | DERIVED_AJCC_M_7TH_ED_2010_2015   %>% between (100,199) ~ '1',
+                             str_detect(DERIVED_EOD_2018_M_2018, '^M0') |  str_detect(DERIVEDSEERCOMBINED_M_2016_2017, '^[cp]0') | DERIVED_AJCC_M_7TH_ED_2010_2015_num %>% between (0, 10) ~ '0',
+                             str_detect(DERIVED_EOD_2018_M_2018, '^M1*') |  str_detect(DERIVEDSEERCOMBINED_M_2016_2017, '^[cp]1') | DERIVED_AJCC_M_7TH_ED_2010_2015_num   %>% between (100,199) ~ '1',
                               T ~ NA_character_ ),
            CS_TUMOR_SIZE_2004_2015_num  = as.numeric(CS_TUMOR_SIZE_2004_2015),
            size.lt2015 = case_when ( 
@@ -769,7 +773,8 @@ A.final  <-  A.final %>% filter (valid.pet.scan)
 incex(A.final)
 A.final  <-  A.final %>% filter (microscopically_confirmed)
 incex(A.final)
-A.final  %>%  write_rds( 'data/A.final35.all.gte.65.RDS' )
+
+A.final  %>%  write_rds( 'data/A.final1003.all.gte.65.RDS' )
 
 A.final %>% filter (tx == 'sublobar' ) %>% count (seer.surgery)
 A.final %>% filter (tx == 'sublobar') %>% count(RX_SUMM_SURG_PRIM_SITE_1998)
@@ -809,6 +814,6 @@ A.sens1  <-  A.sens1 %>% filter (valid.pet.scan)
 incex(A.sens1)
 A.sens1  <-  A.sens1 %>% filter (microscopically_confirmed)
 incex(A.sens1)
-A.sens1  %>%  write_rds( 'data/A.final35.sens1.RDS' )
+A.sens1  %>%  write_rds( 'data/A.final1003.sens1.RDS' )
 table( A.sens1$tnm.n, useNA="ifany")
 
